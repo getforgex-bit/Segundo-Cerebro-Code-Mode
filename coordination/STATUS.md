@@ -16,7 +16,7 @@ _Última actualización: 2026-11-21 18:33 UTC: las 4 líneas relevadas a Sonnet 
 | WS | Sesión | Estado | Último hito | Bloqueos |
 |---|---|---|---|---|
 | WS1 fork | `session_018vGgtBtNgZCaQfUuawSJgp` (Sonnet 5.5) | en curso | relevo @ 0d3af74: spike de 15 tests (12 en verde), hallazgos en CONTRACTS | — |
-| WS2 store | `session_018vGgtEA1LZaw9ewZ6jA8ar` (Sonnet 5.5) | en curso (H4 búsqueda) | H3 integrado (85c975e → 5de9ed2) | — |
+| WS2 store | `session_018vGgtEA1LZaw9ewZ6jA8ar` (Sonnet 5.5) | alcance de la Fase 0 completo; ahora redacta `threat-model.md` (traspasado desde WS3) | H4+H5 integrados (afca2ed) | — |
 | WS3 hub | `session_018vGgtDYGGyXHNEKu9BV2jF` (Sonnet 5.5) | en curso (corrección de la política → hub) | fixtures integrados; política @ 0b7e4ba; relevo @ 56ea568 | — |
 | WS4 server | `session_018vGgtC1ESwsgNGC3g87aZ1` (Sonnet 5.5) | en curso (compilar y ServerHandler) | relevo @ 6e3edcb (código sin compilar) | — |
 
@@ -41,6 +41,7 @@ _Última actualización: 2026-11-21 18:33 UTC: las 4 líneas relevadas a Sonnet 
 | 2026-11-21 | Colisiones de nombre TS: deduplicar en el hub y rechazar namespaces que coincidan en la config | pctx falla con TS2300 en toda ejecución |
 | 2026-11-21 | Type-check de unos 280 ms por ejecución sin caché y una sola ejecución a la vez por proceso (V8_MUTEX): se aceptan en la Fase 0 | Optimizar en la Fase 1 con datos |
 | 2026-11-21 | `ToolHit.ts_namespace` (cerebro_types @ a2554da) | Consulta de WS2: `format_hits` necesita el namespace PascalCase del catálogo |
+| 2026-11-21 | `docs/cerebro/threat-model.md` pasa de WS3 a WS2 | Descargar a WS3, que lleva la ruta crítica (el hub) |
 | 2026-11-21 | rmcp 3.11 en nuestros crates y 1.8 en los de pctx, sin tocar el workspace | Mínima divergencia del fork |
 
 ## Integraciones
@@ -50,6 +51,7 @@ _Última actualización: 2026-11-21 18:33 UTC: las 4 líneas relevadas a Sonnet 
 | 2026-11-21 | WS2 H1 | 3b049d6 → 74101ce | `cargo test -p cerebro_store -p cerebro_search` en verde (1 test) |
 | 2026-11-21 | WS3 fixtures | c7967e7 → aac8521 | `pnpm --filter @cerebro/fixtures test`: 2/2 en verde |
 | 2026-11-21 | WS2 H3 | 85c975e → 5de9ed2 | `cargo test -p cerebro_store`: 13/13; clippy limpio |
+| 2026-11-21 | WS2 H4+H5 | afca2ed | `cargo test -p cerebro_store -p cerebro_search`: 13 + 10; clippy limpio |
 
 ## Sesiones archivadas (Opus, primera tanda)
 

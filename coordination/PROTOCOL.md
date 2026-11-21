@@ -31,8 +31,8 @@ Solo el dueño edita. Si necesitas cambiar algo ajeno, **consulta**.
 |---|---|
 | `crates/cerebro_types/`, `coordination/`, `README.md`, `packages/package.json`, `packages/pnpm-workspace.yaml`, `docs/cerebro/adr/0001-*`, `docs/cerebro/adr/0006-*` | Coordinador |
 | `crates/pctx*/` (parches `CEREBRO-PATCH`), `.github/workflows/cerebro-*.yml`, `docs/cerebro/UPSTREAM.md`, `docs/cerebro/adr/0002-*`, `docs/cerebro/adr/0003-*` | WS1 (**cada parche a pctx requiere aprobación previa del coordinador**) |
-| `crates/cerebro_store/`, `crates/cerebro_search/`, `docs/cerebro/adr/0004-*`, `docs/cerebro/schema.md` | WS2 |
-| `crates/cerebro_hub/`, `crates/cerebro_policy/`, `packages/fixtures/`, `docs/cerebro/adr/0005-*`, `docs/cerebro/threat-model.md` | WS3 |
+| `crates/cerebro_store/`, `crates/cerebro_search/`, `docs/cerebro/adr/0004-*`, `docs/cerebro/schema.md`, `docs/cerebro/threat-model.md` | WS2 |
+| `crates/cerebro_hub/`, `crates/cerebro_policy/`, `packages/fixtures/`, `docs/cerebro/adr/0005-*` | WS3 |
 | `crates/cerebro/`, `packages/e2e/`, `docs/cerebro/meta-tools.md`, `docs/cerebro/clients.md`, `docs/cerebro/sandbox-api.d.ts` | WS4 |
 | `docs/*.md`, `README.pctx.md` y el resto de archivos de upstream | Nadie: son de upstream y no se tocan salvo un parche aprobado |
 
