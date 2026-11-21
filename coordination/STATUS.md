@@ -35,6 +35,11 @@ _Última actualización: 2026-11-21 18:30 UTC._
 | 2026-11-21 | Callbacks del hub vía `main_handle.spawn(...)` | Los callbacks corren en un runtime efímero (`spawn_blocking`) |
 | 2026-11-21 | Aprobaciones por token en la Fase 0; MRTR (`CallToolResponse::InputRequired`) en la Fase 1 | Viable en rmcp 3.11, pero sin probar con clientes |
 | 2026-11-21 | **Parche aprobado** a pctx (WS1): exponer en `CodeMode` el timeout del executor sin romper la API | Hoy `tokio::time::timeout` no mata el hilo de Deno |
+| 2026-11-21 | **Parches aprobados** a pctx (WS1, `CEREBRO-PATCH`, aditivos y sin romper la API): (C1) límite de heap V8 (`heap_limits` + `near_heap_limit_callback` → `terminate_execution`) en el executor y el type-check; (C2) `CodeMode::execute_typescript_with_options` con timeout y heap; (C3) watchdog con timeout para el type-check | Hoy una bomba de memoria tumba el proceso host y el type-check no tiene límite |
+| 2026-11-21 | Errores de callback: stderr y, si no aparecen, la traza (C5, sin parche) | `console.error` previo tapa el error |
+| 2026-11-21 | Hub con una sola conexión rmcp por servidor (multiplexada) | Simplicidad; pool solo si se mide la necesidad |
+| 2026-11-21 | Colisiones de nombre TS: deduplicar en el hub y rechazar namespaces que coincidan en la config | pctx falla con TS2300 en toda ejecución |
+| 2026-11-21 | Type-check de unos 280 ms por ejecución sin caché y una sola ejecución a la vez por proceso (V8_MUTEX): se aceptan en la Fase 0 | Optimizar en la Fase 1 con datos |
 | 2026-11-21 | rmcp 3.11 en nuestros crates y 1.8 en los de pctx, sin tocar el workspace | Mínima divergencia del fork |
 
 ## Integraciones
