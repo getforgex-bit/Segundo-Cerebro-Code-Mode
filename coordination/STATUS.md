@@ -1,6 +1,6 @@
 # Estado de la Fase 0 (lo mantiene el coordinador)
 
-_Última actualización: 2026-11-21, lanzamiento._
+_Última actualización: 2026-11-21 18:25 UTC, 4 sesiones lanzadas._
 
 ## Base común (coordinador) en `ccr-f6dcb0c5-1kktmp`
 
@@ -15,10 +15,10 @@ _Última actualización: 2026-11-21, lanzamiento._
 
 | WS | Sesión | Estado | Último hito | Bloqueos |
 |---|---|---|---|---|
-| WS1 fork | (pendiente de lanzar) | — | — | — |
-| WS2 store | (pendiente de lanzar) | — | — | — |
-| WS3 hub | (pendiente de lanzar) | — | — | — |
-| WS4 server | (pendiente de lanzar) | — | — | — |
+| WS1 fork | `session_018vGgtF7ZXHzAQv1sfgRLMG` | en curso | lanzada 18:24 UTC | — |
+| WS2 store | `session_018vGgtC4G1fD9UdCFRrMNjj` | en curso | lanzada 18:24 UTC | — |
+| WS3 hub | `session_018vGgtBhBzNb8TrFHfWaVEi` | en curso | lanzada 18:24 UTC | — |
+| WS4 server | `session_018vGgtD9kvucbHZMGctThGQ` | en curso | lanzada 18:24 UTC | — |
 
 ## Decisiones del coordinador
 
