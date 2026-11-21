@@ -36,7 +36,7 @@ Solo para categorías **disputadas**, donde los benchmarks públicos no deciden:
 | Coordinación de la Fase 0 (≈4,5 h) | Opus 5.5 `xhigh` · Claude Code | sí | $17,77 | Unos $11,6 son relecturas de caché de un contexto de 563k → **rotar al coordinador** |
 | WS2: store + búsqueda + threat-model + permisos | Sonnet 5.5 · Claude Code | sí (16 + 11 tests) | $2,56 | 3 hitos extra asignados |
 | WS3: política + hub | Sonnet 5.5 · Claude Code | sí (9 + 19 tests) | $2,10 | Una ronda extra por cruce con un cambio de contrato |
-| WS4: servidor + E2E + docs (parcial) | Sonnet 5.5 · Claude Code | parcial (hub mock) | $2,07 | Se completa en el cierre de la Fase 0 |
+| WS4: servidor + E2E + docs + cierre (hub real, límites, E2E 10/10 sin mock) | Sonnet 5.5 · Claude Code | sí (15 tests + E2E 10/10) | $3,27 (total) | El cierre costó unos $1,2 adicionales |
 | WS1: parche pctx + docs + CI | Sonnet 5.5 · Claude Code | sí (19 tests) | $1,53 | **Alcanzó el límite de 5 h** (5 sesiones en paralelo) |
 | 4 workers de la primera tanda (~6 min cada uno) | Opus 5.5 · Claude Code | parcial (relevo) | $1,44–$2,51 cada uno | Sustituidos por Sonnet a petición del usuario |
 
