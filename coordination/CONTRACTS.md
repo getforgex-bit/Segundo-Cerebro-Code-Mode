@@ -136,9 +136,23 @@ Config de la Fase 0 (`.cerebro/config.json`): la parsea WS4 componiendo los tipo
 {
   "servers": [{ "name": "echo", "command": "node", "args": ["packages/fixtures/dist/echo.js"] }],
   "policy": { "default_unknown": "confirm", "overrides": { "echo.*": "allow" } },
-  "limits": { "timeout_ms": 10000, "max_result_bytes": 20000 }
+  "limits": { "timeout_ms": 10000, "max_result_bytes": 20000 },
+  "approvals": { "mode": "out_of_band" }
 }
 ```
+
+### Aprobaciones (decisión de seguridad del coordinador, a raíz del threat-model de WS2)
+
+La IA **ve** el token en `NEEDS_APPROVAL`. Si bastara con reenviarlo en `approvals`, una IA manipulada por inyección de prompts se autoaprobaría. Por eso:
+
+- `ApprovalMode::OutOfBand` **(por defecto)**: `consume` solo acepta tokens en estado `approved`. Un humano aprueba fuera de banda con **`cerebro approve <token>`**.
+  - Este comando muestra la herramienta, el motivo y la expiración, y pide `y/N`.
+  - **Se niega a ejecutarse si stdin/stdout no son una TTY interactiva**, porque las herramientas bash de los agentes no tienen TTY. No es infalible, pero sube el listón junto con los permisos de bash del cliente.
+  - `cerebro approvals` lista las pendientes.
+- `ApprovalMode::ClientConfirm` (opt-in, **más débil**): también acepta `pending`. Confía en que el cliente pida confirmación humana para cada `execute_typescript`.
+- El mensaje de `NEEDS_APPROVAL` (hub) debe decir literalmente: `"Approval required: ask the user to run \`cerebro approve <token>\` in an interactive terminal, then retry with approvals: [\"<token>\"]"`.
+- **Fase 1, prioridad 1:** MRTR (`CallToolResponse::InputRequired`), para que la confirmación la muestre la UI del cliente al humano y no pase por la IA.
+- Firma: `ApprovalStore::consume(token, tool, args_hash, mode)` y `ApprovalStore::list_pending()`. Ya está en `cerebro_types` y `cerebro_store`.
 
 Rutas: `brain_db = <project>/.cerebro/brain.db`, `hub_db = <project>/.cerebro/hub.db`. En la Fase 0 todo es local al proyecto; mover `hub.db` a un directorio global queda para la Fase 1.
 
@@ -157,7 +171,7 @@ En `execute_typescript`, `error` es un `CerebroErrorPayload` si se pudo extraer 
 
 ## 4. Formato de `search_functions` (lo implementa WS2 en `format_hits`)
 
-**El identificador que se muestra es `ts_namespace.ts_name`** (namespace en PascalCase, como lo genera pctx): el mismo que la IA usa en el código (`await Echo.echo(...)`) y en `get_function_details`. No se muestra el nombre MCP original. Decisión del coordinador del 2026-11-21, a raíz de una consulta de WS2.
+El namespace llega en `ToolHit::ts_namespace`, que la búsqueda rellena con un JOIN a `servers`; `format_hits` no lo recalcula. **El identificador que se muestra es `ts_namespace.ts_name`** (namespace en PascalCase, como lo genera pctx): el mismo que la IA usa en el código (`await Echo.echo(...)`) y en `get_function_details`. No se muestra el nombre MCP original. Decisión del coordinador del 2026-11-21, a raíz de una consulta de WS2.
 
 ```
 names:    Github.createIssue

@@ -74,7 +74,9 @@ impl ToolRecord {
     }
 
     pub fn read_only_hint(&self) -> Option<bool> {
-        self.annotations.get("readOnlyHint").and_then(Value::as_bool)
+        self.annotations
+            .get("readOnlyHint")
+            .and_then(Value::as_bool)
     }
 
     pub fn destructive_hint(&self) -> Option<bool> {
@@ -134,6 +136,10 @@ impl Default for SearchOpts {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ToolHit {
     pub tool: ToolRecord,
+    /// Namespace TS visible del servidor (PascalCase, `ServerRecord::ts_namespace`): lo
+    /// rellena la búsqueda desde el catálogo para que `format_hits` muestre
+    /// `ts_namespace.ts_name` sin recalcularlo.
+    pub ts_namespace: String,
     /// Mayor es mejor (RRF de BM25 + trigram).
     pub score: f64,
 }
@@ -161,8 +167,12 @@ pub struct CallCtx {
 pub enum Decision {
     Allow,
     /// Requiere aprobación humana antes de ejecutar.
-    Confirm { reason: String },
-    Deny { reason: String },
+    Confirm {
+        reason: String,
+    },
+    Deny {
+        reason: String,
+    },
 }
 
 // ───────────────────────────── Aprobaciones ─────────────────────────────
@@ -179,15 +189,48 @@ pub struct ApprovalRequest {
     pub ttl_seconds: u32,
 }
 
+/// Quién puede convertir un token de aprobación en permiso de ejecución.
+///
+/// Decisión de seguridad del coordinador (a raíz del threat-model de WS2): la IA recibe el
+/// token en `NEEDS_APPROVAL`, así que si bastara con reenviarlo, una IA manipulada por
+/// inyección de prompts se autoaprobaría. Por defecto se exige aprobación **humana fuera de
+/// banda** (`cerebro approve <token>` en una terminal interactiva; MRTR en la fase 1).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum ApprovalMode {
+    /// Solo tokens en estado `approved` (aprobados por un humano fuera de banda). Por defecto.
+    #[default]
+    OutOfBand,
+    /// También tokens `pending`: confía en que el cliente MCP pida confirmación humana para
+    /// cada `execute_typescript`. **Más débil**; opt-in explícito en la config.
+    ClientConfirm,
+}
+
+/// Aprobación pendiente tal como se muestra a un humano (CLI `cerebro approvals`).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ApprovalInfo {
+    pub token: String,
+    pub execution_id: String,
+    /// `server.tool`.
+    pub tool: String,
+    pub reason: String,
+    pub created_at: String,
+    pub expires_at: String,
+}
+
 /// Aprobaciones de un solo uso (las implementa `cerebro_store`).
 pub trait ApprovalStore: Send + Sync {
     /// Crea una aprobación pendiente y devuelve su token (opaco, aleatorio).
     fn create(&self, req: &ApprovalRequest) -> Result<String>;
-    /// Marca el token como aprobado por el usuario (lo usa el flujo MRTR o la CLI).
+    /// Marca el token como aprobado por un humano (CLI `cerebro approve` o MRTR).
     fn approve(&self, token: &str) -> Result<bool>;
-    /// Consume el token si existe, no expiró, coincide con `tool` y `args_hash`, y está
-    /// pendiente o aprobado. Devuelve `true` si la llamada puede ejecutarse. Un solo uso.
-    fn consume(&self, token: &str, tool: &str, args_hash: &str) -> Result<bool>;
+    /// Consume el token si existe, no expiró, coincide con `tool` y `args_hash`, y su estado es
+    /// `approved` (o también `pending` si `mode == ClientConfirm`). Devuelve `true` si la llamada
+    /// puede ejecutarse. Un solo uso; un intento con `tool`/`args_hash` distintos no lo quema.
+    fn consume(&self, token: &str, tool: &str, args_hash: &str, mode: ApprovalMode)
+    -> Result<bool>;
+    /// Aprobaciones pendientes y no expiradas, de la más reciente a la más antigua.
+    fn list_pending(&self) -> Result<Vec<ApprovalInfo>>;
 }
 
 // ───────────────────────────── Auditoría ─────────────────────────────

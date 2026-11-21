@@ -31,8 +31,8 @@ Solo el dueño edita. Si necesitas cambiar algo ajeno, **consulta**.
 |---|---|
 | `crates/cerebro_types/`, `coordination/`, `README.md`, `packages/package.json`, `packages/pnpm-workspace.yaml`, `docs/cerebro/adr/0001-*`, `docs/cerebro/adr/0006-*` | Coordinador |
 | `crates/pctx*/` (parches `CEREBRO-PATCH`), `.github/workflows/cerebro-*.yml`, `docs/cerebro/UPSTREAM.md`, `docs/cerebro/adr/0002-*`, `docs/cerebro/adr/0003-*` | WS1 (**cada parche a pctx requiere aprobación previa del coordinador**) |
-| `crates/cerebro_store/`, `crates/cerebro_search/`, `docs/cerebro/adr/0004-*`, `docs/cerebro/schema.md` | WS2 |
-| `crates/cerebro_hub/`, `crates/cerebro_policy/`, `packages/fixtures/`, `docs/cerebro/adr/0005-*`, `docs/cerebro/threat-model.md` | WS3 |
+| `crates/cerebro_store/`, `crates/cerebro_search/`, `docs/cerebro/adr/0004-*`, `docs/cerebro/schema.md`, `docs/cerebro/threat-model.md` | WS2 |
+| `crates/cerebro_hub/`, `crates/cerebro_policy/`, `packages/fixtures/`, `docs/cerebro/adr/0005-*` | WS3 |
 | `crates/cerebro/`, `packages/e2e/`, `docs/cerebro/meta-tools.md`, `docs/cerebro/clients.md`, `docs/cerebro/sandbox-api.d.ts` | WS4 |
 | `docs/*.md`, `README.pctx.md` y el resto de archivos de upstream | Nadie: son de upstream y no se tocan salvo un parche aprobado |
 
@@ -88,7 +88,7 @@ Envía un `[REPORTE]` al terminar cada hito de tu brief y **siempre** uno final,
 
 - Compila: `cargo build -p <tu crate>`, o `pnpm -r build` en TS.
 - Tests propios en verde: `cargo test -p <tu crate>`.
-- `cargo clippy -p <tu crate> -- -D warnings` sin avisos en **tus** crates.
+- `cargo clippy -p <tu crate> --all-targets --no-deps -- -D warnings` sin avisos. `--no-deps` evita que se analicen los crates de pctx.
 - `cargo fmt` aplicado.
 - Documentación del hito actualizada (doc comments y, si aplica, tu doc en `docs/cerebro/`).
 - Reporte enviado con la verificación **real**. Si algo no se verificó, se dice.
