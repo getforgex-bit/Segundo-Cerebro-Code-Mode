@@ -4,9 +4,11 @@
 //! Precedencia (de mayor a menor):
 //! 1. **Override** de la config. Gana el patrón más específico:
 //!    `"server.tool"` > `"server.*"` > `"*"`.
-//! 2. `readOnlyHint == true` → [`Decision::Allow`].
-//! 3. `destructiveHint == true` → [`Decision::Confirm`].
-//! 4. `default_unknown` (por defecto [`Rule::Confirm`]).
+//! 2. `readOnlyHint == true` **y** `destructiveHint == true` (conflicto) → [`Decision::Confirm`]:
+//!    ante anotaciones incoherentes gana lo más restrictivo.
+//! 3. `readOnlyHint == true` → [`Decision::Allow`].
+//! 4. `destructiveHint == true` → [`Decision::Confirm`].
+//! 5. `default_unknown` (por defecto [`Rule::Confirm`]).
 //!
 //! La regla de taint (M5) llegará en la Fase 2 y usará [`CallCtx::taint_seen`]; hoy el
 //! contexto no influye en la decisión.
@@ -60,6 +62,13 @@ impl Policy {
         let qualified = tool.qualified_name();
         if let Some((pattern, rule)) = self.find_override(&tool.server, &qualified) {
             return to_decision(rule, &format!("override `{pattern}` for {qualified}"));
+        }
+        if tool.read_only_hint() == Some(true) && tool.destructive_hint() == Some(true) {
+            return Decision::Confirm {
+                reason: format!(
+                    "{qualified} has conflicting annotations (readOnlyHint and destructiveHint)"
+                ),
+            };
         }
         if tool.read_only_hint() == Some(true) {
             return Decision::Allow;
@@ -147,14 +156,17 @@ mod tests {
     }
 
     #[test]
-    fn read_only_beats_destructive_hint() {
-        // Combinación incoherente: manda readOnlyHint (precedencia del contrato).
-        let p = Policy::new(PolicyConfig::default());
+    fn conflicting_hints_confirm() {
+        // Combinación incoherente: gana lo más restrictivo (CONTRACTS §2).
+        let p = policy(json!({"default_unknown": "allow"}));
         let t = tool(
             "d",
             "x",
             json!({"readOnlyHint": true, "destructiveHint": true}),
         );
+        assert!(is_confirm(&p.decide(&t, &CallCtx::default())));
+        // Un override explícito sigue mandando sobre el conflicto.
+        let p = policy(json!({"overrides": {"d.x": "allow"}}));
         assert_eq!(p.decide(&t, &CallCtx::default()), Decision::Allow);
     }
 
