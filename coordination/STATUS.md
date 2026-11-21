@@ -1,6 +1,6 @@
 # Estado de la Fase 0 (lo mantiene el coordinador)
 
-_Última actualización: 2026-11-21 18:30 UTC._
+_Última actualización: 2026-11-21 18:33 UTC: las 4 líneas relevadas a Sonnet 5.5; el coordinador sigue en Opus 5.5._
 
 ## Base común (coordinador) en `ccr-f6dcb0c5-1kktmp`
 
@@ -15,10 +15,10 @@ _Última actualización: 2026-11-21 18:30 UTC._
 
 | WS | Sesión | Estado | Último hito | Bloqueos |
 |---|---|---|---|---|
-| WS1 fork | `session_018vGgtF7ZXHzAQv1sfgRLMG` | en curso | lanzada 18:24 UTC | — |
-| WS2 store | `session_018vGgtC4G1fD9UdCFRrMNjj` | en curso (H2 migraciones) | H1 API integrada (3b049d6) | — |
-| WS3 hub | `session_018vGgtBhBzNb8TrFHfWaVEi` | en curso (H2 política) | fixtures integrados (c7967e7) | — |
-| WS4 server | `session_018vGgtD9kvucbHZMGctThGQ` | en curso | lanzada 18:24 UTC | — |
+| WS1 fork | `session_018vGgtBtNgZCaQfUuawSJgp` (Sonnet 5.5) | en curso | relevo @ 0d3af74: spike de 15 tests (12 en verde), hallazgos en CONTRACTS | — |
+| WS2 store | `session_018vGgtEA1LZaw9ewZ6jA8ar` (Sonnet 5.5) | en curso (H2 migraciones) | H1 integrado; relevo @ dcf65a9 | — |
+| WS3 hub | `session_018vGgtDYGGyXHNEKu9BV2jF` (Sonnet 5.5) | en curso (corrección de la política → hub) | fixtures integrados; política @ 0b7e4ba; relevo @ 56ea568 | — |
+| WS4 server | `session_018vGgtC1ESwsgNGC3g87aZ1` (Sonnet 5.5) | en curso (compilar y ServerHandler) | relevo @ 6e3edcb (código sin compilar) | — |
 
 ## Decisiones del coordinador
 
@@ -48,3 +48,7 @@ _Última actualización: 2026-11-21 18:30 UTC._
 |---|---|---|---|
 | 2026-11-21 | WS2 H1 | 3b049d6 → 74101ce | `cargo test -p cerebro_store -p cerebro_search` en verde (1 test) |
 | 2026-11-21 | WS3 fixtures | c7967e7 → aac8521 | `pnpm --filter @cerebro/fixtures test`: 2/2 en verde |
+
+## Sesiones archivadas (Opus, primera tanda)
+
+WS1 `session_018vGgtF7ZXHzAQv1sfgRLMG` · WS2 `session_018vGgtC4G1fD9UdCFRrMNjj` · WS3 `session_018vGgtBhBzNb8TrFHfWaVEi` · WS4 `session_018vGgtD9kvucbHZMGctThGQ`. Sus notas de relevo se pasaron en el prompt inicial de las sesiones Sonnet.
