@@ -365,7 +365,7 @@ async fn console_error_hides_uncaught_error_message() {
 async fn infinite_loop_is_stopped_by_timeout() {
     let start = Instant::now();
     let res = pctx_executor::execute(
-        "while (true) {}\nexport default 1;",
+        "async function run() { while (true) {} }\nexport default await run();",
         pctx_executor::ExecuteOptions::new().with_timeout(Duration::from_secs(2)),
     )
     .await
@@ -378,7 +378,7 @@ async fn infinite_loop_is_stopped_by_timeout() {
 
     // Una promesa que nunca se resuelve también corta (temporizador de tokio).
     let res = pctx_executor::execute(
-        "await new Promise(() => {});\nexport default 1;",
+        "async function run() { await new Promise(() => {}); return 1; }\nexport default await run();",
         pctx_executor::ExecuteOptions::new().with_timeout(Duration::from_secs(1)),
     )
     .await
@@ -387,7 +387,7 @@ async fn infinite_loop_is_stopped_by_timeout() {
     assert!(res.stderr.contains("exceeded 1s"), "{}", res.stderr);
 
     // Tras un timeout, el proceso sigue sirviendo ejecuciones.
-    let res = pctx_executor::execute("export default 2;", pctx_executor::ExecuteOptions::new())
+    let res = pctx_executor::execute("async function run() { return 2; }\nexport default await run();", pctx_executor::ExecuteOptions::new())
         .await
         .unwrap();
     assert_eq!(res.output, Some(json!(2)));
@@ -399,6 +399,7 @@ async fn infinite_loop_is_stopped_by_timeout() {
 #[serial]
 async fn sandbox_has_no_network_nor_fs() {
     let probe = r#"
+        async function run() {
         const r: Record<string, string> = {};
         const g = globalThis as any;
         r.fetch = typeof g.fetch;
@@ -409,9 +410,11 @@ async fn sandbox_has_no_network_nor_fs() {
         r.DenoOpen = typeof g.Deno?.open;
         r.ops = Object.keys(g.Deno?.core?.ops ?? {}).filter((k) => /net|fetch|fs|read|write|open|connect|http|tcp|dns|env|spawn|run/i.test(k)).join(",");
         try { await g.fetch("https://example.com"); r.fetchCall = "ok"; } catch (e) { r.fetchCall = "error: " + String(e); }
-        try { await import("file:///etc/passwd"); r.importFs = "ok"; } catch (e) { r.importFs = "error: " + String(e); }
-        try { await import("https://example.com/x.js"); r.importNet = "ok"; } catch (e) { r.importNet = "error: " + String(e); }
-        export default r;
+        try { await (new Function("u", "return import(u)") as any)("file:///etc/passwd"); r.importFs = "ok"; } catch (e) { r.importFs = "error: " + String(e); }
+        try { await (new Function("u", "return import(u)") as any)("https://example.com/x.js"); r.importNet = "ok"; } catch (e) { r.importNet = "error: " + String(e); }
+        return r;
+        }
+        export default await run();
     "#;
     let res = pctx_executor::execute(probe, pctx_executor::ExecuteOptions::new())
         .await
