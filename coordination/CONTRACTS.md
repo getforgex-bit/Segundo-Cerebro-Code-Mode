@@ -157,7 +157,7 @@ En `execute_typescript`, `error` es un `CerebroErrorPayload` si se pudo extraer 
 
 ## 4. Formato de `search_functions` (lo implementa WS2 en `format_hits`)
 
-**El identificador que se muestra es `ts_namespace.ts_name`** (namespace en PascalCase, como lo genera pctx): el mismo que la IA usa en el código (`await Echo.echo(...)`) y en `get_function_details`. No se muestra el nombre MCP original. Decisión del coordinador del 2026-11-21, a raíz de una consulta de WS2.
+El namespace llega en `ToolHit::ts_namespace`, que la búsqueda rellena con un JOIN a `servers`; `format_hits` no lo recalcula. **El identificador que se muestra es `ts_namespace.ts_name`** (namespace en PascalCase, como lo genera pctx): el mismo que la IA usa en el código (`await Echo.echo(...)`) y en `get_function_details`. No se muestra el nombre MCP original. Decisión del coordinador del 2026-11-21, a raíz de una consulta de WS2.
 
 ```
 names:    Github.createIssue
