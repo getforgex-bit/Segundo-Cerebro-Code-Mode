@@ -1069,6 +1069,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "cerebro_spike_pctx"
+version = "0.0.1"
+dependencies = [
+ "cerebro_types",
+ "deno_core",
+ "pctx_code_mode",
+ "pctx_config",
+ "pctx_executor",
+ "serde_json",
+ "serial_test",
+ "tokio",
+]
+
+[[package]]
 name = "cerebro_store"
 version = "0.0.1"
 dependencies = [
