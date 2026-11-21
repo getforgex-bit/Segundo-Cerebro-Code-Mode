@@ -1,0 +1,21 @@
+[package]
+name = "cerebro_spike_pctx"
+version = "0.0.1"
+description = "Spike desechable de WS1: tests que verifican el comportamiento real de pctx (callbacks, errores, timeout, red, memoria)"
+edition.workspace = true
+rust-version.workspace = true
+license = "LicenseRef-ForgeX-Internal"
+publish = false
+
+[lib]
+path = "src/lib.rs"
+
+[dev-dependencies]
+cerebro_types = { path = "../cerebro_types" }
+pctx_code_mode = { path = "../pctx_code_mode" }
+pctx_executor = { path = "../pctx_executor" }
+pctx_config = { path = "../pctx_config" }
+serde_json = { workspace = true }
+deno_core = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+serial_test = "3"
