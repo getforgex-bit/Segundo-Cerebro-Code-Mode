@@ -16,7 +16,7 @@ _Última actualización: 2026-11-21 18:33 UTC: las 4 líneas relevadas a Sonnet 
 | WS | Sesión | Estado | Último hito | Bloqueos |
 |---|---|---|---|---|
 | WS1 fork | `session_018vGgtBtNgZCaQfUuawSJgp` (Sonnet 5.5) | en curso | relevo @ 0d3af74: spike de 15 tests (12 en verde), hallazgos en CONTRACTS | — |
-| WS2 store | `session_018vGgtEA1LZaw9ewZ6jA8ar` (Sonnet 5.5) | alcance de la Fase 0 completo; ahora redacta `threat-model.md` (traspasado desde WS3) | H4+H5 integrados (afca2ed) | — |
+| WS2 store | `session_018vGgtEA1LZaw9ewZ6jA8ar` (Sonnet 5.5) | **completo** (en reposo) | permisos + .gitignore + threat-model (8320e98) | — |
 | WS3 hub | `session_018vGgtDYGGyXHNEKu9BV2jF` (Sonnet 5.5) | en curso (corrección de la política → hub) | fixtures integrados; política @ 0b7e4ba; relevo @ 56ea568 | — |
 | WS4 server | `session_018vGgtC1ESwsgNGC3g87aZ1` (Sonnet 5.5) | en curso (docs H4 + esqueleto E2E; espera el hub de WS3) | @ 66c1596: servidor rmcp 3.11 con 6 herramientas, Store y Search reales, 12 tests; **tools/list = 2064 bytes ≈ 516 tokens** | hub real (WS3) |
 
@@ -54,6 +54,7 @@ _Última actualización: 2026-11-21 18:33 UTC: las 4 líneas relevadas a Sonnet 
 | 2026-11-21 | WS2 H1 | 3b049d6 → 74101ce | `cargo test -p cerebro_store -p cerebro_search` en verde (1 test) |
 | 2026-11-21 | WS3 fixtures | c7967e7 → aac8521 | `pnpm --filter @cerebro/fixtures test`: 2/2 en verde |
 | 2026-11-21 | WS2 H3 | 85c975e → 5de9ed2 | `cargo test -p cerebro_store`: 13/13; clippy limpio |
+| 2026-11-21 | WS2 permisos y .gitignore | 8320e98 | store 16 + search 11; clippy --no-deps limpio |
 | 2026-11-21 | WS2 threat-model | 158726a | `cargo test -p cerebro_search`: 11; clippy limpio |
 | 2026-11-21 | Coordinador: `ApprovalMode` + `list_pending` | ver el siguiente commit | `cargo test -p cerebro_store`: 15; clippy limpio |
 | 2026-11-21 | WS2 H4+H5 | afca2ed | `cargo test -p cerebro_store -p cerebro_search`: 13 + 10; clippy limpio |
