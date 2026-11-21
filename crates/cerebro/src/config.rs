@@ -123,7 +123,10 @@ impl CerebroConfig {
                 "regla de política desconocida: {rule}"
             );
         }
-        anyhow::ensure!(self.limits.max_result_bytes > 0, "max_result_bytes debe ser > 0");
+        anyhow::ensure!(
+            self.limits.max_result_bytes > 0,
+            "max_result_bytes debe ser > 0"
+        );
         anyhow::ensure!(self.limits.timeout_ms > 0, "timeout_ms debe ser > 0");
         Ok(())
     }
