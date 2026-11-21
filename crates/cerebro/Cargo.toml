@@ -1,0 +1,40 @@
+[package]
+name = "cerebro"
+version = "0.0.1"
+edition = "2024"
+license = "LicenseRef-ForgeX-Internal"
+publish = false
+description = "Cerebro: servidor MCP Code Mode (6 meta-herramientas) sobre pctx"
+
+[[bin]]
+name = "cerebro"
+path = "src/main.rs"
+
+[features]
+# Backend en memoria (mocks de cerebro_types + herramientas falsas `echo` y `destructive`).
+# Solo para desarrollo y pruebas hasta integrar WS2/WS3. Los tests unitarios lo usan siempre.
+mock = []
+
+[dependencies]
+cerebro_types = { path = "../cerebro_types" }
+cerebro_hub = { path = "../cerebro_hub" }
+cerebro_policy = { path = "../cerebro_policy" }
+cerebro_store = { path = "../cerebro_store" }
+cerebro_search = { path = "../cerebro_search" }
+pctx_code_mode = { path = "../pctx_code_mode" }
+
+rmcp = { version = "3.11", default-features = false, features = ["server", "macros", "transport-io"] }
+clap = { version = "4.5", features = ["derive"] }
+blake3 = "1.8"
+ulid = "3"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+serde = { workspace = true }
+serde_json = { workspace = true }
+anyhow = { workspace = true }
+tokio = { workspace = true, features = ["rt-multi-thread", "macros", "io-std", "time", "sync"] }
+tracing = { workspace = true }
+
+[dev-dependencies]
+rmcp = { version = "3.11", default-features = false, features = ["client", "server", "transport-io"] }
+tokio = { workspace = true, features = ["rt-multi-thread", "macros", "io-util", "time"] }

@@ -1,0 +1,21 @@
+{
+  "name": "@cerebro/e2e",
+  "version": "0.0.0",
+  "private": true,
+  "license": "LicenseRef-ForgeX-Internal",
+  "description": "E2E de Cerebro: cliente MCP real contra el binario compilado.",
+  "type": "module",
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "build": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "1.32.2"
+  },
+  "devDependencies": {
+    "@types/node": "22.20.5",
+    "typescript": "5.9.3",
+    "vitest": "3.2.4"
+  }
+}
