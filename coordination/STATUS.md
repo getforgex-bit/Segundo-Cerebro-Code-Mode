@@ -28,6 +28,9 @@ _Última actualización: 2026-11-21 18:30 UTC._
 | 2026-11-21 | Config de la Fase 0 propia (`.cerebro/config.json`), no `pctx.json` | Evitar depender del parser upstream; WS1 decide si se reutiliza después |
 | 2026-11-21 | `packages/.gitignore` (node_modules, */dist) y `pnpm-lock.yaml` tratado como Cargo.lock | Propuesta de WS3 |
 | 2026-11-21 | Se acepta la subida de thiserror 2.0.17→2.0.21 en Cargo.lock por rusqlite 0.41 | Parche semver, sin riesgo para upstream |
+| 2026-11-21 | Sesiones de trabajo en **Sonnet 5.5** y coordinador en **Opus 5.5** (petición del usuario); relevo de las 4 sesiones | — |
+| 2026-11-21 | `format_hits` muestra `ts_namespace.ts_name` (CONTRACTS §4) | Consulta de WS2: que la IA use el mismo nombre en búsqueda, detalles y código |
+| 2026-11-21 | Política: readOnly y destructive a la vez → Confirm (CONTRACTS §2) | Seguridad: ante anotaciones contradictorias gana lo más restrictivo |
 | 2026-11-21 | rmcp 3.11 en nuestros crates y 1.8 en los de pctx, sin tocar el workspace | Mínima divergencia del fork |
 
 ## Integraciones
