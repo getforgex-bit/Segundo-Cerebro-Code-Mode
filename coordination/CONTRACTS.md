@@ -66,7 +66,7 @@ impl Policy {
 }
 ```
 
-Reglas por defecto: override > `readOnlyHint == true` → Allow > `destructiveHint == true` → Confirm > `default_unknown`. La regla de taint (M5) llega en la Fase 2.
+Reglas por defecto: override (`server.tool` > `server.*` > `*`) > **si `readOnlyHint` y `destructiveHint` son ambos `true` → Confirm** (las anotaciones son pistas no confiables y en caso de conflicto gana lo más restrictivo) > `readOnlyHint == true` → Allow > `destructiveHint == true` → Confirm > `default_unknown`. La regla de taint (M5) llega en la Fase 2.
 
 ### `cerebro_hub` (WS3)
 
@@ -92,7 +92,7 @@ impl Hub {
     pub fn callback_configs(&self) -> Result<Vec<pctx_code_mode::model::CallbackConfig>>;
     /// Registry nuevo **por ejecución**: cada callback → política → aprobación → llamada → auditoría.
     pub fn build_registry(self: &Arc<Self>, execution_id: &str, approvals: Vec<String>)
-        -> Result<(pctx_code_mode::PctxRegistry, ExecutionScope)>;
+        -> Result<(pctx_code_mode::registry::PctxRegistry, ExecutionScope)>;
     /// Llamada directa (la usan los callbacks y los tests).
     pub async fn call(self: &Arc<Self>, server: &str, tool: &str, args: Option<Value>, ctx: &CallCtx)
         -> std::result::Result<Value, CerebroErrorPayload>;
@@ -100,7 +100,26 @@ impl Hub {
 }
 ```
 
-Mapeo a pctx: `CallbackConfig { namespace: Some(server.ts_namespace), name: tool.name, description, input_schema, output_schema }`. El id del callback es el de pctx (`CallbackConfig::id()` = `"{namespace}__{name}"`). El nombre TS real que genera pctx se guarda en `ToolRecord::ts_name`. WS1 confirma cómo lo calcula pctx.
+Mapeo a pctx: `CallbackConfig { namespace: Some(server.name), name: tool.name, description, input_schema, output_schema }`. El id del callback es el de pctx (`CallbackConfig::id()` = `"{namespace}__{name}"`).
+**pctx convierte el namespace a PascalCase** (`echo` → `Echo`, ver `pctx_codegen/src/tools.rs:70`; lo halló WS4). Por tanto, `ServerRecord::ts_namespace` y el nombre TS de cada herramienta (`ToolRecord::ts_name`) **se calculan con las mismas funciones de `pctx_codegen`**, reutilizadas y no reimplementadas, para que coincidan siempre con lo que ve la IA (`await Echo.echo({...})`). Si esas funciones no son públicas, WS1 propone el parche mínimo.
+
+**Convención de nombres (verificada por WS1 en `cerebro_spike_pctx`):**
+- `ServerRecord::ts_namespace` = **PascalCase** visible (`heck::to_pascal_case(server.name)`: `github` → `Github`, `my-server` → `MyServer`).
+- `ToolRecord::ts_name` = `to_lower_camel_case(tool.name)` (`create_issue` → `createIssue`).
+- `CallbackConfig.namespace` = `server.name` **crudo**, y `name` = nombre MCP crudo, así que el id es `"{server}__{tool}"`.
+- Se usan las funciones de `pctx_code_mode::codegen::case`, no una reimplementación.
+
+**Colisiones:** pctx no detecta que dos nombres crudos produzcan el mismo nombre TS (`create_issue` y `createIssue` hacen fallar **toda** ejecución con TS2300).
+- El hub deduplica por (`ts_namespace`, `ts_name`) antes de registrar: ordena por nombre crudo, se queda con el primero y marca los demás `available=false`, con un aviso en `SyncReport`.
+- Dos servidores cuyo PascalCase coincida (`my-server` y `my_server`): el segundo se rechaza en la validación de la config, porque nombres de servidor distintos deben dar namespaces distintos.
+
+**Registry completo:** `execute_typescript` exige que el registry contenga **todos** los ids del `CodeMode`, así que `build_registry` registra el catálogo entero. Si el catálogo cambia, el servidor reconstruye el `CodeMode`.
+
+**Extracción de errores (WS4):** `CerebroErrorPayload::parse_from(stderr)`. Si no aparece, porque un `console.error` previo lo tapa (`pctx_executor/src/lib.rs:239`), se busca en `output.trace.events[]` el `callback_invocation` con `outcome.type == "error"`.
+
+**Concurrencia:** pctx serializa todas las ejecuciones con un `V8_MUTEX` global, así que solo corre una a la vez por proceso. Se acepta en la Fase 0; en la Fase 1 se evalúa un pool de procesos worker.
+
+**Runtime de los callbacks (aviso de WS4):** `Hub::new` debe llamarse dentro del runtime tokio principal y guardar `tokio::runtime::Handle::current()`. `execute_typescript` corre en `spawn_blocking`, con un runtime `current_thread` propio, porque Deno no es `Send`. Los futures de los callbacks se ejecutan **en ese runtime efímero**. Por eso el callback del hub debe hacer `main_handle.spawn(hub.call(...)).await`, donde `main_handle` es el `tokio::runtime::Handle` del runtime principal capturado al construir el registry. Así nada que tenga que sobrevivir a la ejecución (procesos hijos o tareas del cliente rmcp) nace en el runtime efímero.
 
 **Errores de callback:** `Err(payload.to_callback_error())` con `CerebroErrorPayload` (prefijo `CEREBRO_ERROR:`). Para `NEEDS_APPROVAL`, el payload lleva `approval_token`.
 
@@ -128,7 +147,7 @@ Rutas: `brain_db = <project>/.cerebro/brain.db`, `hub_db = <project>/.cerebro/hu
 | Herramienta | Entrada | Salida (texto) |
 |---|---|---|
 | `search_functions` | `{ query: string, detail?: "names"\|"summary"\|"full", server?: string, limit?: number }` | `format_hits(...)` |
-| `get_function_details` | `{ functions: string[] }` (`"namespace.fn"`) | Firmas TS que devuelve `CodeMode::get_function_details` |
+| `get_function_details` | `{ functions: string[] }`: acepta `Namespace.fn` (lo que muestra `search_functions`) **y también** `server.tool`, que se traduce vía catálogo | Firmas TS que devuelve `CodeMode::get_function_details` |
 | `execute_typescript` | `{ code: string, approvals?: string[] }` | JSON `{ success, output, stdout, error?, calls: CallSummary[], truncated }` |
 | `cerebro_recall` | `{ query: string, scope?: string, limit?: number }` | Stub en la Fase 0: `"brain not implemented yet (phase 2)"` |
 | `cerebro_remember` | `{ kind: string, title: string, body: string }` | Stub |
@@ -138,11 +157,13 @@ En `execute_typescript`, `error` es un `CerebroErrorPayload` si se pudo extraer 
 
 ## 4. Formato de `search_functions` (lo implementa WS2 en `format_hits`)
 
+**El identificador que se muestra es `ts_namespace.ts_name`** (namespace en PascalCase, como lo genera pctx): el mismo que la IA usa en el código (`await Echo.echo(...)`) y en `get_function_details`. No se muestra el nombre MCP original. Decisión del coordinador del 2026-11-21, a raíz de una consulta de WS2.
+
 ```
-names:    echo.echo
-summary:  echo.echo — Echoes the input text [read]
-full:     echo.echo — Echoes the input text [read]
-            echo(input: { text: string }): Promise<{ text: string }>
+names:    Github.createIssue
+summary:  Github.createIssue — Create an issue in a repository [write]
+full:     Github.createIssue — Create an issue in a repository [write]
+            createIssue(input: { owner: string; repo: string; title: string }): Promise<unknown>
 ```
 
 Marcas: `[read]` si `readOnlyHint`, `[destructive]` si `destructiveHint`, y `[write]` en el resto. La descripción se recorta a la primera frase o a 100 caracteres.
