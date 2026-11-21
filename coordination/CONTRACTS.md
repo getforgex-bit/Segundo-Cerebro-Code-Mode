@@ -66,7 +66,7 @@ impl Policy {
 }
 ```
 
-Reglas por defecto: override > `readOnlyHint == true` → Allow > `destructiveHint == true` → Confirm > `default_unknown`. La regla de taint (M5) llega en la Fase 2.
+Reglas por defecto: override (`server.tool` > `server.*` > `*`) > **si `readOnlyHint` y `destructiveHint` son ambos `true` → Confirm** (las anotaciones son pistas no confiables y en caso de conflicto gana lo más restrictivo) > `readOnlyHint == true` → Allow > `destructiveHint == true` → Confirm > `default_unknown`. La regla de taint (M5) llega en la Fase 2.
 
 ### `cerebro_hub` (WS3)
 
@@ -100,7 +100,10 @@ impl Hub {
 }
 ```
 
-Mapeo a pctx: `CallbackConfig { namespace: Some(server.ts_namespace), name: tool.name, description, input_schema, output_schema }`. El id del callback es el de pctx (`CallbackConfig::id()` = `"{namespace}__{name}"`). El nombre TS real que genera pctx se guarda en `ToolRecord::ts_name`. WS1 confirma cómo lo calcula pctx.
+Mapeo a pctx: `CallbackConfig { namespace: Some(server.name), name: tool.name, description, input_schema, output_schema }`. El id del callback es el de pctx (`CallbackConfig::id()` = `"{namespace}__{name}"`).
+**pctx convierte el namespace a PascalCase** (`echo` → `Echo`, ver `pctx_codegen/src/tools.rs:70`; lo halló WS4). Por tanto, `ServerRecord::ts_namespace` y el nombre TS de cada herramienta (`ToolRecord::ts_name`) **se calculan con las mismas funciones de `pctx_codegen`**, reutilizadas y no reimplementadas, para que coincidan siempre con lo que ve la IA (`await Echo.echo({...})`). Si esas funciones no son públicas, WS1 propone el parche mínimo.
+
+**Runtime de los callbacks (aviso de WS4):** `execute_typescript` corre en `spawn_blocking`, con un runtime `current_thread` propio, porque Deno no es `Send`. Los futures de los callbacks se ejecutan **en ese runtime efímero**. Por eso el callback del hub debe hacer `main_handle.spawn(hub.call(...)).await`, donde `main_handle` es el `tokio::runtime::Handle` del runtime principal capturado al construir el registry. Así nada que tenga que sobrevivir a la ejecución (procesos hijos o tareas del cliente rmcp) nace en el runtime efímero.
 
 **Errores de callback:** `Err(payload.to_callback_error())` con `CerebroErrorPayload` (prefijo `CEREBRO_ERROR:`). Para `NEEDS_APPROVAL`, el payload lleva `approval_token`.
 
@@ -128,7 +131,7 @@ Rutas: `brain_db = <project>/.cerebro/brain.db`, `hub_db = <project>/.cerebro/hu
 | Herramienta | Entrada | Salida (texto) |
 |---|---|---|
 | `search_functions` | `{ query: string, detail?: "names"\|"summary"\|"full", server?: string, limit?: number }` | `format_hits(...)` |
-| `get_function_details` | `{ functions: string[] }` (`"namespace.fn"`) | Firmas TS que devuelve `CodeMode::get_function_details` |
+| `get_function_details` | `{ functions: string[] }`: acepta `Namespace.fn` (lo que muestra `search_functions`) **y también** `server.tool`, que se traduce vía catálogo | Firmas TS que devuelve `CodeMode::get_function_details` |
 | `execute_typescript` | `{ code: string, approvals?: string[] }` | JSON `{ success, output, stdout, error?, calls: CallSummary[], truncated }` |
 | `cerebro_recall` | `{ query: string, scope?: string, limit?: number }` | Stub en la Fase 0: `"brain not implemented yet (phase 2)"` |
 | `cerebro_remember` | `{ kind: string, title: string, body: string }` | Stub |
@@ -138,11 +141,13 @@ En `execute_typescript`, `error` es un `CerebroErrorPayload` si se pudo extraer 
 
 ## 4. Formato de `search_functions` (lo implementa WS2 en `format_hits`)
 
+**El identificador que se muestra es `ts_namespace.ts_name`** (namespace en PascalCase, como lo genera pctx): el mismo que la IA usa en el código (`await Echo.echo(...)`) y en `get_function_details`. No se muestra el nombre MCP original. Decisión del coordinador del 2026-11-21, a raíz de una consulta de WS2.
+
 ```
-names:    echo.echo
-summary:  echo.echo — Echoes the input text [read]
-full:     echo.echo — Echoes the input text [read]
-            echo(input: { text: string }): Promise<{ text: string }>
+names:    Github.createIssue
+summary:  Github.createIssue — Create an issue in a repository [write]
+full:     Github.createIssue — Create an issue in a repository [write]
+            createIssue(input: { owner: string; repo: string; title: string }): Promise<unknown>
 ```
 
 Marcas: `[read]` si `readOnlyHint`, `[destructive]` si `destructiveHint`, y `[write]` en el resto. La descripción se recorta a la primera frase o a 100 caracteres.
