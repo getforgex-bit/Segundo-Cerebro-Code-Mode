@@ -1,6 +1,6 @@
 # Estado de la Fase 0 (lo mantiene el coordinador)
 
-_Última actualización: 2026-11-21 18:25 UTC, 4 sesiones lanzadas._
+_Última actualización: 2026-11-21 18:30 UTC._
 
 ## Base común (coordinador) en `ccr-f6dcb0c5-1kktmp`
 
@@ -16,8 +16,8 @@ _Última actualización: 2026-11-21 18:25 UTC, 4 sesiones lanzadas._
 | WS | Sesión | Estado | Último hito | Bloqueos |
 |---|---|---|---|---|
 | WS1 fork | `session_018vGgtF7ZXHzAQv1sfgRLMG` | en curso | lanzada 18:24 UTC | — |
-| WS2 store | `session_018vGgtC4G1fD9UdCFRrMNjj` | en curso | lanzada 18:24 UTC | — |
-| WS3 hub | `session_018vGgtBhBzNb8TrFHfWaVEi` | en curso | lanzada 18:24 UTC | — |
+| WS2 store | `session_018vGgtC4G1fD9UdCFRrMNjj` | en curso (H2 migraciones) | H1 API integrada (3b049d6) | — |
+| WS3 hub | `session_018vGgtBhBzNb8TrFHfWaVEi` | en curso (H2 política) | fixtures integrados (c7967e7) | — |
 | WS4 server | `session_018vGgtD9kvucbHZMGctThGQ` | en curso | lanzada 18:24 UTC | — |
 
 ## Decisiones del coordinador
@@ -26,10 +26,13 @@ _Última actualización: 2026-11-21 18:25 UTC, 4 sesiones lanzadas._
 |---|---|---|
 | 2026-11-21 | Contratos compartidos en `cerebro_types` | Que las 4 líneas avancen en paralelo con mocks |
 | 2026-11-21 | Config de la Fase 0 propia (`.cerebro/config.json`), no `pctx.json` | Evitar depender del parser upstream; WS1 decide si se reutiliza después |
+| 2026-11-21 | `packages/.gitignore` (node_modules, */dist) y `pnpm-lock.yaml` tratado como Cargo.lock | Propuesta de WS3 |
+| 2026-11-21 | Se acepta la subida de thiserror 2.0.17→2.0.21 en Cargo.lock por rusqlite 0.41 | Parche semver, sin riesgo para upstream |
 | 2026-11-21 | rmcp 3.11 en nuestros crates y 1.8 en los de pctx, sin tocar el workspace | Mínima divergencia del fork |
 
 ## Integraciones
 
 | Fecha | WS | Commit | Verificación |
 |---|---|---|---|
-| — | — | — | — |
+| 2026-11-21 | WS2 H1 | 3b049d6 → 74101ce | `cargo test -p cerebro_store -p cerebro_search` en verde (1 test) |
+| 2026-11-21 | WS3 fixtures | c7967e7 → aac8521 | `pnpm --filter @cerebro/fixtures test`: 2/2 en verde |
