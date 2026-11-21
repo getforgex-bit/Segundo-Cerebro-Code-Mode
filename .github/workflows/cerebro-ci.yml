@@ -3,7 +3,7 @@ name: cerebro-ci
 
 on:
   push:
-    branches: [main, "ws/**", "ccr-*"]
+    branches: [main, develop, "a/**", "b/**", "ws/**", "ccr-*"]
     paths:
       - "crates/**"
       - "packages/**"
