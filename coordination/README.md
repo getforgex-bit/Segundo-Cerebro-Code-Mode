@@ -1,34 +1,25 @@
-# Coordinación multi-sesión de la Fase 0 (temporal)
+# Coordinación multiagente
 
-> Carpeta **temporal**. Al cerrar la Fase 0, su contenido útil se consolida en `docs/cerebro/` y la carpeta se elimina.
-
-## Qué hay aquí
+> Coordinación permanente de los equipos de FORGEX Brain. Empezó como el espacio temporal de la Fase 0 (sesiones WS1–WS4) y ahora coordina a **dos equipos**: A en Claude Code y B en Antigravity.
+> Punto de entrada general: [`../AGENTS.md`](../AGENTS.md).
 
 | Archivo | Para qué |
 |---|---|
-| [`PLAN.md`](PLAN.md) | Plan aprobado completo (v2, con el v1 en el Anexo A). Es la fuente de verdad del "qué" y el "por qué". |
-| [`PROTOCOL.md`](PROTOCOL.md) | **Léelo primero.** Roles, ramas, propiedad de archivos, cómo reportar y cómo consultar al coordinador. |
-| [`CONTRACTS.md`](CONTRACTS.md) | Interfaces entre crates, versiones fijadas y convenciones. Los cambios pasan por el coordinador. |
-| [`STATUS.md`](STATUS.md) | Tablero de estado. Lo mantiene el coordinador. |
-| [`ws/`](ws/) | Un brief por línea de trabajo (WS = *workstream*). |
+| [`TEAMS.md`](TEAMS.md) | **Equipos, roles, propiedad por rutas, jerarquía y concurrencia** |
+| [`PROTOCOL.md`](PROTOCOL.md) | §1–7 mensajes dentro del Equipo A · §8 Issues y PRs entre equipos · §9 relevo · §10 ramas |
+| [`CONTRACTS.md`](CONTRACTS.md) | Interfaces entre crates y proceso de cambio (§7). Código fuente: `crates/cerebro_types` |
+| [`STATUS.md`](STATUS.md) | Estado, decisiones del coordinador e integraciones |
+| [`AGENT-EVALS.md`](AGENT-EVALS.md) | Evaluación empírica de modelos y registro de métricas |
+| [`PLAN.md`](PLAN.md) | Plan de producto (v2) y roadmap. Lee solo la sección que necesites |
+| [`teams/NEON-BOOTSTRAP.md`](teams/NEON-BOOTSTRAP.md) | Prompt de arranque del coordinador del Equipo B |
+| [`ws/`](ws/) | Briefs de la Fase 0 (WS1–WS4), **cerrados**. Se conservan como referencia |
 
-## Líneas de trabajo de la Fase 0
+## Fases
 
-| WS | Sesión | Rama | Alcance |
-|---|---|---|---|
-| — | **Coordinador** (sesión principal) | `ccr-f6dcb0c5-1kktmp` (integración) | Dirige, decide, revisa, integra y razona lo difícil. Dueño de `cerebro_types`, `coordination/` y los ADR 0001 y 0006. |
-| [WS1](ws/WS1-fork.md) | fork | `ws/ws1-fork` | Análisis de pctx, `docs/cerebro/UPSTREAM.md`, ADR 0002 y 0003, CI, límites del sandbox y parches `CEREBRO-PATCH` |
-| [WS2](ws/WS2-store.md) | store | `ws/ws2-store` | `cerebro_store` (SQLite) y `cerebro_search` (FTS5), ADR 0004 |
-| [WS3](ws/WS3-hub-policy.md) | hub | `ws/ws3-hub` | `cerebro_hub` (rmcp 3.11), `cerebro_policy`, `packages/fixtures`, ADR 0005, modelo de amenazas |
-| [WS4](ws/WS4-server-e2e.md) | server | `ws/ws4-server` | Binario `cerebro` (servidor MCP con 6 herramientas), `packages/e2e`, `meta-tools.md`, `clients.md`, `sandbox-api.d.ts` |
+| Fase | Equipo | Estado |
+|---|---|---|
+| 0: fork, contratos, store, búsqueda, hub, política, servidor y E2E | A | Cierre en curso (ver `STATUS.md`) |
+| 1: MVP del gateway (MRTR, handles, CLI de clientes, *rug-pull*, empaquetado) | A | Issues `team:a` |
+| 2: segundo cerebro (memorias, indexado, grafo, recuperación, clientes, evals) | B | Issues `team:b` |
 
-## Grafo de dependencias
-
-```
-cerebro_types (coordinador, ya existe)
-   ├── WS2 store/search ──┐
-   ├── WS3 hub/policy ────┼──► WS4 server + E2E ──► integración (coordinador)
-   └── WS1 fork/CI ───────┘
-```
-
-Todas las líneas arrancan **a la vez**. Cada una programa contra los traits de `cerebro_types` con *mocks* propios hasta que la implementación real llega a la rama de integración.
+Las fases 1 y 2 avanzan **en paralelo** cuando se cumplen las condiciones de arranque de `TEAMS.md`, recogidas en ADR 0007 §"Arranque".

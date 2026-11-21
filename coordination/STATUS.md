@@ -1,6 +1,17 @@
-# Estado de la Fase 0 (lo mantiene el coordinador)
+# Estado del proyecto (lo mantiene el coordinador del Equipo A)
 
-_Última actualización: 2026-11-21 18:33 UTC: las 4 líneas relevadas a Sonnet 5.5; el coordinador sigue en Opus 5.5._
+_Última actualización: 2026-11-21 ~23:00 UTC: cierre de la Fase 0 en curso y organización de dos equipos preparada (ADR 0007)._
+
+## Equipos (detalle en `TEAMS.md`)
+
+| Equipo | Coordinador | Estado |
+|---|---|---|
+| A · Claude Code | Opus 5.5 · `session_018vGgtDkbBcKozrRZMWdwQz` | Cerrando la Fase 0; a continuación, Issues `team:a` (Fase 1) |
+| B · Antigravity | Gemini 4 Neon | **Pendiente de arranque**: el usuario pega `teams/NEON-BOOTSTRAP.md` cuando se cumplan las condiciones de arranque (ADR 0007) |
+
+### Issues abiertos clave
+
+_(se rellena en C2: Issue raíz "Coordinación A↔B", A1–A5, B1–B5)_
 
 ## Base común (coordinador) en `ccr-f6dcb0c5-1kktmp`
 
@@ -11,7 +22,7 @@ _Última actualización: 2026-11-21 18:33 UTC: las 4 líneas relevadas a Sonnet 
 - [x] Workspace pnpm en `packages/`.
 - [x] Plan dividido en `coordination/`.
 
-## Líneas de trabajo
+## Líneas de trabajo de la Fase 0 (Equipo A)
 
 | WS | Sesión | Estado | Último hito | Bloqueos |
 |---|---|---|---|---|

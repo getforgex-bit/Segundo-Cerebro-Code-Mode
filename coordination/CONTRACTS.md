@@ -203,3 +203,20 @@ Marcas: `[read]` si `readOnlyHint`, `[destructive]` si `destructiveHint`, y `[wr
   - sin red;
   - los fixtures se lanzan con `node` desde `packages/fixtures/dist`;
   - si `dist` no existe, el test se marca `#[ignore]` con el motivo, **nunca** como un falso verde.
+
+## 7. Proceso de cambio de contrato (entre equipos)
+
+Aplica a `crates/cerebro_types/` y a este documento:
+1. Issue con la plantilla `cerebro-contract-change`: qué cambia, por qué, quién lo consume, compatibilidad y plan de migración.
+2. PR con el cambio, que **compile en `develop` sin romper a los consumidores**. Si rompe algo, el mismo PR adapta a los consumidores o se coordina el orden en el Issue.
+3. **Visto bueno explícito de ambos coordinadores** (Opus y Neon) en el Issue.
+4. Merge por Opus y aviso a los equipos afectados (comentario en el Issue y `[INFO]` interno en el Equipo A).
+
+Los cambios **aditivos** (un campo opcional, un método con implementación por defecto) siguen el mismo flujo, pero basta un solo visto bueno si el otro coordinador no responde en 24 h.
+
+## 8. Contratos pendientes (los propone el Equipo B)
+
+| Contrato | Issue | Estado | Consumidor |
+|---|---|---|---|
+| Trait `Brain` (remember, recall con scope `memories\|docs\|code\|all`, primer con presupuesto de tokens, get, link, neighbors, read, symbols) | B1 | Por proponer (Neon) | Equipo A: handlers `cerebro_recall/remember/primer` y namespace `Brain` en el sandbox |
+| API de `cerebro_clients` (detectar, leer servidores → `DownstreamServer`, instalar o reemplazar con `--dry-run` y diff, backup) | B4 | Por proponer (Neon / `@clients`) | Equipo A: CLI `cerebro import-config / install / doctor` |
