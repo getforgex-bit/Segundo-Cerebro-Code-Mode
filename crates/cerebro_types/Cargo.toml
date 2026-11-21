@@ -1,0 +1,13 @@
+[package]
+name = "cerebro_types"
+version = "0.0.1"
+description = "Contratos compartidos de Cerebro: tipos y traits entre store, search, hub, policy y server"
+edition.workspace = true
+rust-version.workspace = true
+license = "LicenseRef-ForgeX-Internal"
+publish = false
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+anyhow = { workspace = true }
