@@ -11,3 +11,7 @@ publish = false
 cerebro_types = { path = "../cerebro_types" }
 cerebro_store = { path = "../cerebro_store" }
 anyhow = { workspace = true }
+rusqlite = { version = "0.41", features = ["bundled"] }
+
+[dev-dependencies]
+serde_json = { workspace = true }

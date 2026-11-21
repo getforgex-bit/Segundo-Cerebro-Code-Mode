@@ -1015,6 +1015,8 @@ dependencies = [
  "anyhow",
  "cerebro_store",
  "cerebro_types",
+ "rusqlite",
+ "serde_json",
 ]
 
 [[package]]
