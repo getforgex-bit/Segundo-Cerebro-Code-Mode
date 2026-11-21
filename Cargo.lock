@@ -1023,8 +1023,10 @@ version = "0.0.1"
 dependencies = [
  "anyhow",
  "cerebro_types",
+ "getrandom 0.3.4",
  "rusqlite",
  "rusqlite_migration",
+ "serde",
  "serde_json",
 ]
 
