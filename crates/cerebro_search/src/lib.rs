@@ -256,7 +256,11 @@ pub fn format_hits(hits: &[ToolHit], detail: Detail) -> String {
                 if detail == Detail::Full
                     && let Some(sig) = t.ts_signature.as_deref().filter(|s| !s.is_empty())
                 {
-                    lines.push(format!("  {sig}"));
+                    // Una sola línea: un servidor hostil no puede falsear filas con saltos de línea.
+                    lines.push(format!(
+                        "  {}",
+                        sig.split_whitespace().collect::<Vec<_>>().join(" ")
+                    ));
                 }
             }
         }
