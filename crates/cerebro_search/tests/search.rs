@@ -34,6 +34,25 @@ fn tool(server: &str, name: &str, ts: &str, desc: &str, ann: serde_json::Value) 
     }
 }
 
+#[test]
+fn hits_carry_ts_namespace_from_servers() {
+    let store = Store::open_in_memory().unwrap();
+    let mut srv = server("my-git");
+    srv.ts_namespace = "MyGit".into();
+    store
+        .replace_server_tools(
+            &srv,
+            &[tool("my-git", "do_it", "doIt", "Does it", json!({}))],
+        )
+        .unwrap();
+    let s = SqliteToolSearch::new(store);
+    for q in ["do it", ""] {
+        let hits = s.search(q, &SearchOpts::default()).unwrap();
+        assert_eq!(hits[0].ts_namespace, "MyGit");
+        assert_eq!(format_hits(&hits, Detail::Names), "MyGit.doIt");
+    }
+}
+
 fn fixture() -> SqliteToolSearch {
     let store = Store::open_in_memory().unwrap();
     store
@@ -273,22 +292,24 @@ fn format_hits_marks_and_truncation() {
     let out = format_hits(
         &[cerebro_types::ToolHit {
             tool: t.clone(),
+            ts_namespace: "A".into(),
             score: 0.0,
         }],
         Detail::Summary,
     );
-    assert_eq!(out, format!("a.b — {}… [read]", "x".repeat(100)));
+    assert_eq!(out, format!("A.b — {}… [read]", "x".repeat(100)));
     t.description = String::new();
     t.ts_signature = None;
     assert_eq!(
         format_hits(
             &[cerebro_types::ToolHit {
                 tool: t,
+                ts_namespace: "A".into(),
                 score: 0.0
             }],
             Detail::Full
         ),
-        "a.b [read]"
+        "A.b [read]"
     );
     assert_eq!(format_hits(&[], Detail::Full), "");
 }

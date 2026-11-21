@@ -98,6 +98,42 @@ impl SqliteToolSearch {
         Ok(out)
     }
 
+    /// Namespace TS de un servidor; si no existe en el catálogo usa `server` y avisa.
+    fn namespace_of(&self, cache: &mut HashMap<String, String>, server: &str) -> String {
+        if let Some(ns) = cache.get(server) {
+            return ns.clone();
+        }
+        let found: Option<String> = self
+            .store
+            .conn()
+            .query_row(
+                "SELECT ts_namespace FROM hub.servers WHERE name = ?1",
+                [server],
+                |r| r.get(0),
+            )
+            .ok();
+        let ns = found.unwrap_or_else(|| {
+            tracing::warn!(
+                server,
+                "servidor sin fila en el catálogo: se usa su nombre como namespace"
+            );
+            server.to_string()
+        });
+        cache.insert(server.to_string(), ns.clone());
+        ns
+    }
+
+    fn with_namespaces(&self, hits: Vec<(ToolRecord, f64)>) -> Vec<ToolHit> {
+        let mut cache = HashMap::new();
+        hits.into_iter()
+            .map(|(tool, score)| ToolHit {
+                ts_namespace: self.namespace_of(&mut cache, &tool.server),
+                tool,
+                score,
+            })
+            .collect()
+    }
+
     fn first_by_name(&self, server: Option<&str>, limit: usize) -> Result<Vec<ToolHit>> {
         let conn = self.store.conn();
         let mut st = conn.prepare(&format!(
@@ -107,9 +143,11 @@ impl SqliteToolSearch {
         ))?;
         let hits = st
             .query_map(params![server, limit as i64], map_tool_row)?
-            .map(|r| r.map(|tool| ToolHit { tool, score: 0.0 }))
+            .map(|r| r.map(|tool| (tool, 0.0)))
             .collect::<rusqlite::Result<Vec<_>>>()?;
-        Ok(hits)
+        drop(st);
+        drop(conn);
+        Ok(self.with_namespaces(hits))
     }
 }
 
@@ -154,17 +192,16 @@ impl ToolSearch for SqliteToolSearch {
         }
         let ids: Vec<i64> = scores.keys().copied().collect();
         let mut tools = self.tools_by_ids(&ids)?;
-        let mut hits: Vec<ToolHit> = scores
+        let mut hits: Vec<(ToolRecord, f64)> = scores
             .into_iter()
-            .filter_map(|(id, score)| tools.remove(&id).map(|tool| ToolHit { tool, score }))
+            .filter_map(|(id, score)| tools.remove(&id).map(|tool| (tool, score)))
             .collect();
         hits.sort_by(|a, b| {
-            b.score
-                .total_cmp(&a.score)
-                .then_with(|| a.tool.qualified_name().cmp(&b.tool.qualified_name()))
+            b.1.total_cmp(&a.1)
+                .then_with(|| a.0.qualified_name().cmp(&b.0.qualified_name()))
         });
         hits.truncate(limit);
-        Ok(hits)
+        Ok(self.with_namespaces(hits))
     }
 }
 
@@ -200,13 +237,12 @@ fn mark(tool: &ToolRecord) -> &'static str {
 
 /// Texto compacto para `search_functions`: una línea por resultado (ver `CONTRACTS.md` §4).
 ///
-/// El identificador mostrado es `namespace.ts_name`. Mientras `ToolHit` no lleve
-/// `ts_namespace`, se usa el nombre del servidor como namespace.
+/// El identificador mostrado es `ts_namespace.ts_name`, el mismo que usa la IA en su código.
 pub fn format_hits(hits: &[ToolHit], detail: Detail) -> String {
     let mut lines: Vec<String> = Vec::with_capacity(hits.len());
     for hit in hits {
         let t = &hit.tool;
-        let id = format!("{}.{}", t.server, t.ts_name);
+        let id = format!("{}.{}", hit.ts_namespace, t.ts_name);
         match detail {
             Detail::Names => lines.push(id),
             Detail::Summary | Detail::Full => {

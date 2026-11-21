@@ -1017,6 +1017,7 @@ dependencies = [
  "cerebro_types",
  "rusqlite",
  "serde_json",
+ "tracing",
 ]
 
 [[package]]
