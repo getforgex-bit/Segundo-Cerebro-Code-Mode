@@ -1,0 +1,44 @@
+[package]
+name = "pctx_code_execution_runtime"
+version = "0.3.1"
+edition = "2024"
+rust-version = "1.89"
+license = "MIT"
+description = "JavaScript/TypeScript execution runtime for pctx"
+repository = "https://github.com/portofcontext/pctx"
+keywords = ["javascript", "typescript", "runtime", "pctx"]
+categories = ["development-tools"]
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+pctx_registry = { version = "^0.1.4", path = "../pctx_registry" }
+pctx_config = { version = "^0.1.5", path = "../pctx_config" }
+deno_core = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+anyhow = { workspace = true }
+deno_error = { workspace = true }
+url = { workspace = true }
+rmcp = { workspace = true }
+tracing = { workspace = true }
+tokio = { workspace = true, features = ["time"] }
+
+[build-dependencies]
+pctx_config = { version = "^0.1.5", path = "../pctx_config" }
+deno_core = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+deno_error = { workspace = true }
+rmcp = { workspace = true }
+
+
+[dev-dependencies]
+rustls = { version = "0.23", features = ["ring"] }
+tokio = { workspace = true, features = ["rt", "macros"] }
+
+[lints]
+workspace = true

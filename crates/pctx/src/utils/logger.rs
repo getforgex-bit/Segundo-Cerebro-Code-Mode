@@ -1,0 +1,66 @@
+use std::io::Write;
+
+const WHITELISTED_CRATES: &[&str] = &[
+    "pctx",
+    "pctx_code_execution_runtime",
+    "pctx_code_mode",
+    "pctx_codegen",
+    "pctx_config",
+    "pctx_deno_transpiler",
+    "pctx_executor",
+    "pctx_mcp_server",
+    "pctx_registry",
+    "pctx_session_server",
+    "pctx_type_check_runtime",
+];
+
+pub(crate) fn default_env_filter(level: &str) -> String {
+    let mut filters: Vec<String> = WHITELISTED_CRATES
+        .iter()
+        .map(|crate_name| format!("{crate_name}={level}"))
+        .collect();
+
+    // Set default level for all other crates to warn
+    filters.insert(0, "warn".to_string());
+
+    filters.join(",")
+}
+
+/// Level named by the global `-v`/`-q` flags, or `None` when neither was passed.
+pub(crate) fn flag_level(verbose: u8, quiet: bool) -> Option<&'static str> {
+    match (quiet, verbose) {
+        (true, _) => Some("warn"),
+        (false, 0) => None,
+        (false, 1) => Some("debug"),
+        (false, _) => Some("trace"),
+    }
+}
+
+pub(crate) fn init_cli_logger(verbose: u8, quiet: bool) {
+    let level_str = flag_level(verbose, quiet).unwrap_or("info");
+
+    let mut builder = env_logger::Builder::from_env(
+        env_logger::Env::default().default_filter_or(default_env_filter(level_str)),
+    );
+
+    // For INFO and below, only include/colorize WARN and ERROR levels
+    if ["info", "warn", "error"].contains(&level_str) {
+        builder.format(|buf, record| {
+            if record.level() == tracing::log::Level::Info {
+                writeln!(buf, "{}", record.args())
+            } else {
+                let log_style = buf.default_level_style(record.level());
+                writeln!(
+                    buf,
+                    "{log_style}[{}]{log_style:#} {}",
+                    record.level(),
+                    record.args()
+                )
+            }
+        });
+    }
+
+    if let Err(e) = builder.try_init() {
+        eprintln!("pctx: Failed initializing env_logger: {e:?}");
+    }
+}

@@ -1,0 +1,17 @@
+[package]
+name = "pctx_deno_transpiler"
+version = "0.2.0"
+edition = "2024"
+rust-version = "1.89"
+license = "MIT"
+description = "TypeScript transpilation utilities using Deno"
+repository = "https://github.com/portofcontext/pctx"
+keywords = ["typescript", "transpiler", "deno", "pctx"]
+categories = ["development-tools"]
+
+[dependencies]
+deno_ast = { version = "0.53.3", features = ["transpiling"] }
+thiserror = { workspace = true }
+
+[lints]
+workspace = true

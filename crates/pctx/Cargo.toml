@@ -1,0 +1,119 @@
+[package]
+name = "pctx"
+version = "1.0.0"
+edition = "2024"
+rust-version = "1.89"
+license = "MIT"
+repository = "https://github.com/portofcontext/pctx"
+homepage = "https://portofcontext.com"
+description = "Open source framework to connect AI agents to tools and services with code mode"
+keywords = ["mcp", "ai", "agents", "code-mode", "model-context-protocol"]
+categories = ["command-line-utilities", "development-tools", "mcp"]
+readme = "../../README.md"
+default-run = "pctx"
+
+[[bin]]
+name = "pctx"
+path = "src/bin/cli.rs"
+
+[[bin]]
+name = "generate-cli-docs"
+path = "src/bin/generate-cli-docs.rs"
+
+
+[dependencies]
+# local crates
+pctx_code_mode = { path = "../pctx_code_mode" }
+pctx_executor = { path = "../pctx_executor" }
+pctx_session_server = { path = "../pctx_session_server" }
+pctx_mcp_server = { path = "../pctx_mcp_server" }
+pctx_codegen = { path = "../pctx_codegen" }
+pctx_config = { path = "../pctx_config" }
+
+# CLI
+clap = { version = "4", features = ["derive", "env", "wrap_help"] }
+url = { workspace = true, features = ["serde"] }
+rustls = { version = "0.23", default-features = false, features = [
+    "aws-lc-rs",
+] }
+camino = { version = "1", features = ["serde1"] }
+spinoff = "0.8"
+anstyle = "1"
+inquire = "0.9"
+tabled = { version = "0.20", features = ["ansi"] }
+terminal_size = "0.4"
+clap-markdown = "0.1"
+ratatui = "0.30.0-beta.0"
+crossterm = "0.29"
+chrono = { workspace = true, features = ["serde"] }
+notify = "8"
+arboard = "3"
+shlex = { workspace = true }
+
+# Logging and Telemetry
+tracing = { workspace = true }
+tracing-subscriber = { version = "0.3", features = [
+    "env-filter",
+    # "fmt",
+    "ansi",
+    "json",
+] }
+env_logger = "0.11"
+opentelemetry = { workspace = true }
+opentelemetry_sdk = { workspace = true, features = ["rt-tokio"] }
+opentelemetry-otlp = { workspace = true, features = [
+    "grpc-tonic",
+    "http-proto",
+    "trace",
+] }
+tracing-opentelemetry = { workspace = true }
+
+# MCP server
+rmcp = { workspace = true, features = [
+    "server",
+    "transport-streamable-http-server",
+    "macros",
+    "schemars",
+] }
+axum = { workspace = true, features = ["macros"] }
+tower = { workspace = true }
+tower-http = { workspace = true, features = ["trace", "request-id"] }
+
+
+# General
+serde = { workspace = true }
+indexmap = { workspace = true, features = ["serde"] }
+serde_json = { workspace = true }
+tokio = { workspace = true, features = [
+    "macros",
+    "rt",
+    "rt-multi-thread",
+    "io-std",
+    "signal",
+    "process",
+] }
+
+# Errors
+anyhow = { workspace = true }
+regex = "1.12.3"
+
+
+[target.'cfg(all(not(target_env = "msvc"), any(target_arch = "x86_64", target_arch = "aarch64", target_arch = "powerpc64")))'.dependencies]
+tikv-jemallocator = "0.6"
+
+[target.'cfg(target_os = "windows")'.dependencies]
+mimalloc = "0.1"
+
+[dev-dependencies]
+tempfile = "3"
+
+[lints]
+workspace = true
+
+[package.metadata.dist]
+dist = true
+
+# System dependencies for cargo-dist to install
+[package.metadata.dist.dependencies.apt]
+libclang-dev = "*"
+libc6-dev = "*"

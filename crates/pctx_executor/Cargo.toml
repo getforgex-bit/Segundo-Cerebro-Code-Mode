@@ -1,0 +1,47 @@
+[package]
+name = "pctx_executor"
+version = "0.4.0"
+edition = "2024"
+rust-version = "1.89"
+license = "MIT"
+description = "TypeScript execution environment orchestration"
+repository = "https://github.com/portofcontext/pctx"
+keywords = ["typescript", "executor", "pctx"]
+categories = ["development-tools"]
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+deno_core = { workspace = true }
+deno_resolver = { workspace = true }
+node_resolver = { workspace = true }
+sys_traits = { workspace = true }
+pctx_deno_transpiler = { version = "^0.2.0", path = "../pctx_deno_transpiler" }
+pctx_code_execution_runtime = { version = "^0.3.1", path = "../pctx_code_execution_runtime" }
+pctx_registry = { version = "^0.1.4", path = "../pctx_registry" }
+pctx_type_check_runtime = { version = "^0.2.1", path = "../pctx_type_check_runtime" }
+tempfile = "3"
+regex = "1"
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["time"] }
+tracing = { workspace = true }
+futures = "0.3"
+
+[target.'cfg(windows)'.dependencies]
+# Need version 0.59 to match deno_subprocess_windows transitive dependency
+# and ensure the feature is enabled for it as well
+windows-sys = { version = "0.59", features = [
+    "Win32_System_SystemInformation",
+    "Win32_Networking_WinSock",
+] }
+
+[dev-dependencies]
+rustls = { version = "0.23", default-features = false, features = [
+    "aws-lc-rs",
+] }
+tokio = { workspace = true, features = ["rt", "macros"] }
+serial_test = "3"
+url = { workspace = true }
+
+[lints]
+workspace = true

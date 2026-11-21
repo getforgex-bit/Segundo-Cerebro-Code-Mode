@@ -1,0 +1,84 @@
+[workspace]
+resolver = "2"
+members = ["crates/*"]
+
+[workspace.package]
+edition = "2024"
+rust-version = "1.89"
+license = "MIT"
+repository = "https://github.com/portofcontext/pctx"
+
+[workspace.dependencies]
+# Async runtime
+tokio = "1"
+
+# Serialization
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+uuid = { version = "1", features = ["v4", "serde"] }
+
+# Web framework
+axum = "0.8"
+tower = "0.5"
+tower-http = "0.6"
+utoipa = "5"
+
+# MCP
+rmcp = "1.8.0"
+reqwest = { version = "0.13.2", default-features = false }
+
+# Logging & Telemetry
+tracing = "0.1"
+opentelemetry = "0.31"
+opentelemetry_sdk = "0.31"
+opentelemetry-otlp = "0.31"
+tracing-opentelemetry = "0.32"
+
+# Error handling
+thiserror = "2"
+anyhow = "1"
+
+# Utilities
+shlex = "1"
+url = "2"
+chrono = "0.4"
+indexmap = "2"
+
+# Deno runtime
+deno_core = { version = "0.412", features = ["include_icu_data"] }
+deno_ast = "0.53.3"
+deno_error = "=0.7.1"
+deno_resolver = "0.90"
+node_resolver = "0.97"
+sys_traits = "0.1"
+
+[workspace.lints.rust]
+unreachable_pub = "warn"
+
+[workspace.lints.clippy]
+all = { level = "warn", priority = -1 }
+pedantic = { level = "warn", priority = -1 }
+cast_possible_truncation = "allow"
+cast_possible_wrap = "allow"
+cast_precision_loss = "allow"
+cast_sign_loss = "allow"
+match_same_arms = "allow"
+module_name_repetitions = "allow"
+must_use_candidate = "allow"
+similar_names = "allow"
+too_many_lines = "allow"
+
+[profile.release]
+opt-level = 3
+lto = "fat"
+codegen-units = 1
+strip = true
+
+# The profile that 'dist' will build with
+[profile.dist]
+inherits = "release"
+lto = "thin"
+
+# [profile.dev.package."*"]
+# opt-level = 3
+# debug = true

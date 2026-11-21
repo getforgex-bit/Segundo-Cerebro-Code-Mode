@@ -1,0 +1,35 @@
+/target
+.DS_Store
+*.swp
+*.swo
+*~
+.vscode/
+.idea/
+*.iml
+.claude
+pctx.json
+pctx-dev.jsonl
+.pctx
+
+scratch/*
+
+# Python
+*.pyc
+__pycache__/
+*.so
+*.pyd
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+.pytest_cache/
+*.lock
+uv.lock
+
+# Sphinx documentation
+pctx-py/docs/_build/
+pctx-py/docs/_static/
+pctx-py/docs/_templates/
+
+target/

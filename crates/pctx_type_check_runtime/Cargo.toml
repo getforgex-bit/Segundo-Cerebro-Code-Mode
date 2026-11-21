@@ -1,0 +1,34 @@
+[package]
+name = "pctx_type_check_runtime"
+version = "0.2.1"
+edition = "2024"
+rust-version = "1.89"
+license = "MIT"
+description = "Isolated TypeScript type checking runtime for PCTX"
+repository = "https://github.com/portofcontext/pctx"
+keywords = ["typescript", "type-checking", "pctx"]
+categories = ["development-tools"]
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+deno_core = { workspace = true }
+deno_ast = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+once_cell = "1"
+futures = "0.3"
+
+[build-dependencies]
+deno_core = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["rt", "macros"] }
+
+[lints]
+workspace = true
