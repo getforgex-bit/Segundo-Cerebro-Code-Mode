@@ -316,7 +316,7 @@ impl<H: HubApi> ServerHandler for CerebroServer<H> {
     fn get_info(&self) -> ServerConfig {
         ServerConfig::new(ServerCapabilities::builder().enable_tools().build())
             .with_instructions(tools::INSTRUCTIONS)
-            .with_server_info(Implementation::from_build_env())
+            .with_server_info(Implementation::new("cerebro", env!("CARGO_PKG_VERSION")))
     }
 
     async fn list_tools(
