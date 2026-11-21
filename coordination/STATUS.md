@@ -18,7 +18,7 @@ _Última actualización: 2026-11-21 18:33 UTC: las 4 líneas relevadas a Sonnet 
 | WS1 fork | `session_018vGgtBtNgZCaQfUuawSJgp` (Sonnet 5.5) | en curso | relevo @ 0d3af74: spike de 15 tests (12 en verde), hallazgos en CONTRACTS | — |
 | WS2 store | `session_018vGgtEA1LZaw9ewZ6jA8ar` (Sonnet 5.5) | alcance de la Fase 0 completo; ahora redacta `threat-model.md` (traspasado desde WS3) | H4+H5 integrados (afca2ed) | — |
 | WS3 hub | `session_018vGgtDYGGyXHNEKu9BV2jF` (Sonnet 5.5) | en curso (corrección de la política → hub) | fixtures integrados; política @ 0b7e4ba; relevo @ 56ea568 | — |
-| WS4 server | `session_018vGgtC1ESwsgNGC3g87aZ1` (Sonnet 5.5) | en curso (compilar y ServerHandler) | relevo @ 6e3edcb (código sin compilar) | — |
+| WS4 server | `session_018vGgtC1ESwsgNGC3g87aZ1` (Sonnet 5.5) | en curso (docs H4 + esqueleto E2E; espera el hub de WS3) | @ 66c1596: servidor rmcp 3.11 con 6 herramientas, Store y Search reales, 12 tests; **tools/list = 2064 bytes ≈ 516 tokens** | hub real (WS3) |
 
 ## Decisiones del coordinador
 
@@ -44,6 +44,7 @@ _Última actualización: 2026-11-21 18:33 UTC: las 4 líneas relevadas a Sonnet 
 | 2026-11-21 | `docs/cerebro/threat-model.md` pasa de WS3 a WS2 | Descargar a WS3, que lleva la ruta crítica (el hub) |
 | 2026-11-21 | **Seguridad:** las aprobaciones exigen aprobación humana fuera de banda por defecto (`ApprovalMode::OutOfBand`, `cerebro approve` solo con TTY); `ClientConfirm` como opt-in; MRTR pasa a ser la prioridad 1 de la Fase 1 | threat-model de WS2: la IA podía reenviar el token sin humano |
 | 2026-11-21 | Backlog de la Fase 1: detectar cambios de `schema_hash` en herramientas existentes (*rug pull*) → `confirm` hasta revisión | threat-model de WS2 |
+| 2026-11-21 | DoD de clippy: `cargo clippy -p <crate> --all-targets --no-deps -- -D warnings` | Sin `--no-deps`, clippy analiza también los crates de pctx (con avisos propios) |
 | 2026-11-21 | rmcp 3.11 en nuestros crates y 1.8 en los de pctx, sin tocar el workspace | Mínima divergencia del fork |
 
 ## Integraciones
