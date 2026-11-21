@@ -7,7 +7,7 @@ _Última actualización: 2026-11-21 ~23:00 UTC: cierre de la Fase 0 en curso y o
 | Equipo | Coordinador | Estado |
 |---|---|---|
 | A · Claude Code | Opus 5.5 · `session_018vGgtDkbBcKozrRZMWdwQz` | **Fase 0 cerrada**; siguiente: Issues `team:a` #7–#11 (Fase 1) |
-| B · Antigravity | Gemini 4 Neon | **Condiciones de arranque cumplidas**: falta que el usuario pegue `teams/NEON-BOOTSTRAP.md` en Antigravity |
+| B · Antigravity | Gemini 4 Neon | Condiciones de arranque cumplidas (CI run #4 en verde, Issue #1). El usuario configuró el GitHub MCP e inició a Neon. **Falta el acuse de Neon en el #1**: hasta entonces, la coordinación Claude↔Antigravity no está verificada |
 
 ### Issues abiertos clave
 
