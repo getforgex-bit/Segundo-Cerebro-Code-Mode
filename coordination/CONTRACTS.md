@@ -66,7 +66,7 @@ impl Policy {
 }
 ```
 
-Reglas por defecto: override > `readOnlyHint == true` → Allow > `destructiveHint == true` → Confirm > `default_unknown`. La regla de taint (M5) llega en la Fase 2.
+Reglas por defecto: override (`server.tool` > `server.*` > `*`) > **si `readOnlyHint` y `destructiveHint` son ambos `true` → Confirm** (las anotaciones son pistas no confiables y en caso de conflicto gana lo más restrictivo) > `readOnlyHint == true` → Allow > `destructiveHint == true` → Confirm > `default_unknown`. La regla de taint (M5) llega en la Fase 2.
 
 ### `cerebro_hub` (WS3)
 
@@ -138,11 +138,13 @@ En `execute_typescript`, `error` es un `CerebroErrorPayload` si se pudo extraer 
 
 ## 4. Formato de `search_functions` (lo implementa WS2 en `format_hits`)
 
+**El identificador que se muestra es `ts_namespace.ts_name`**: el mismo que la IA usa en el código (`await echo.echo(...)`) y en `get_function_details`. No se muestra el nombre MCP original. Decisión del coordinador del 2026-11-21, a raíz de una consulta de WS2.
+
 ```
-names:    echo.echo
-summary:  echo.echo — Echoes the input text [read]
-full:     echo.echo — Echoes the input text [read]
-            echo(input: { text: string }): Promise<{ text: string }>
+names:    github.createIssue
+summary:  github.createIssue — Create an issue in a repository [write]
+full:     github.createIssue — Create an issue in a repository [write]
+            createIssue(input: { owner: string; repo: string; title: string }): Promise<unknown>
 ```
 
 Marcas: `[read]` si `readOnlyHint`, `[destructive]` si `destructiveHint`, y `[write]` en el resto. La descripción se recorta a la primera frase o a 100 caracteres.
