@@ -11,7 +11,19 @@ _Última actualización: 2026-11-21 ~23:00 UTC: cierre de la Fase 0 en curso y o
 
 ### Issues abiertos clave
 
-_(se rellena en C2: Issue raíz "Coordinación A↔B", A1–A5, B1–B5)_
+| Issue | Equipo | Título | Estado |
+|---|---|---|---|
+| #1 | A+B | Coordinación A↔B (raíz) | abierto permanente |
+| #2 | B | B1 · contrato `Brain` + ADR 0008 | ready |
+| #3 | B | B2 · `cerebro_brain` memorias (depende de #2) | ready |
+| #4 | B | B3 · indexado v1 | ready |
+| #5 | B | B4 · `cerebro_clients` (bloquea a #9) | ready |
+| #6 | B | B5 · sinónimos + golden set + evals | ready |
+| #7 | A | A1 · MRTR | ready |
+| #8 | A | A2 · handles M6 | ready |
+| #9 | A | A3 · CLI de clientes | blocked (#5) |
+| #10 | A | A4 · *rug-pull* | ready |
+| #11 | A | A5 · empaquetado | ready |
 
 ## Base común (coordinador) en `ccr-f6dcb0c5-1kktmp`
 
