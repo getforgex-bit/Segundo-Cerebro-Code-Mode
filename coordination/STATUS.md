@@ -42,6 +42,8 @@ _Última actualización: 2026-11-21 18:33 UTC: las 4 líneas relevadas a Sonnet 
 | 2026-11-21 | Type-check de unos 280 ms por ejecución sin caché y una sola ejecución a la vez por proceso (V8_MUTEX): se aceptan en la Fase 0 | Optimizar en la Fase 1 con datos |
 | 2026-11-21 | `ToolHit.ts_namespace` (cerebro_types @ a2554da) | Consulta de WS2: `format_hits` necesita el namespace PascalCase del catálogo |
 | 2026-11-21 | `docs/cerebro/threat-model.md` pasa de WS3 a WS2 | Descargar a WS3, que lleva la ruta crítica (el hub) |
+| 2026-11-21 | **Seguridad:** las aprobaciones exigen aprobación humana fuera de banda por defecto (`ApprovalMode::OutOfBand`, `cerebro approve` solo con TTY); `ClientConfirm` como opt-in; MRTR pasa a ser la prioridad 1 de la Fase 1 | threat-model de WS2: la IA podía reenviar el token sin humano |
+| 2026-11-21 | Backlog de la Fase 1: detectar cambios de `schema_hash` en herramientas existentes (*rug pull*) → `confirm` hasta revisión | threat-model de WS2 |
 | 2026-11-21 | rmcp 3.11 en nuestros crates y 1.8 en los de pctx, sin tocar el workspace | Mínima divergencia del fork |
 
 ## Integraciones
@@ -51,6 +53,8 @@ _Última actualización: 2026-11-21 18:33 UTC: las 4 líneas relevadas a Sonnet 
 | 2026-11-21 | WS2 H1 | 3b049d6 → 74101ce | `cargo test -p cerebro_store -p cerebro_search` en verde (1 test) |
 | 2026-11-21 | WS3 fixtures | c7967e7 → aac8521 | `pnpm --filter @cerebro/fixtures test`: 2/2 en verde |
 | 2026-11-21 | WS2 H3 | 85c975e → 5de9ed2 | `cargo test -p cerebro_store`: 13/13; clippy limpio |
+| 2026-11-21 | WS2 threat-model | 158726a | `cargo test -p cerebro_search`: 11; clippy limpio |
+| 2026-11-21 | Coordinador: `ApprovalMode` + `list_pending` | ver el siguiente commit | `cargo test -p cerebro_store`: 15; clippy limpio |
 | 2026-11-21 | WS2 H4+H5 | afca2ed | `cargo test -p cerebro_store -p cerebro_search`: 13 + 10; clippy limpio |
 
 ## Sesiones archivadas (Opus, primera tanda)
