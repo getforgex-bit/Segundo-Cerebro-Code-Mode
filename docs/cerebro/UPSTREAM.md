@@ -110,3 +110,17 @@ Cambios de comportamiento respecto a upstream: **(1)** el type-check se corta a 
 Cobertura: `crates/cerebro_spike_pctx/tests/spike.rs` (`memory_bomb_is_stopped_with_heap_limit`, `code_mode_options_stop_memory_bomb_and_timeout`, `type_check_timeout_stops_the_check`, `type_check_heap_limit_survives`) y los tests upstream de `pctx_executor`, `pctx_code_mode` y `pctx_type_check_runtime`, que siguen en verde.
 
 **Límite conocido (no cubierto):** el límite de heap de V8 no cubre memoria fuera del heap. Verificado: `new Uint8Array(3 GiB)` **tiene éxito** con `heap_limit = 64 MB`. Queda como riesgo residual; mitigación posible en la Fase 1: límite de memoria del proceso (cgroup/`ulimit -v`) o un pool de procesos worker.
+
+## 10. Workflows de upstream en nuestro repo (análisis; **no se ha desactivado nada**)
+
+| Workflow | Disparador | ¿Se ejecuta aquí? | Riesgo / propuesta |
+|---|---|---|---|
+| `ci.yaml` | `push` a `main` y `pull_request` con cambios en `Cargo.toml`/`crates/**` | **Sí**, en cada PR/push a `main` que toque crates | Ejecuta `cargo fmt --all --check` y `cargo test --workspace --locked`: **fallará mientras `cerebro_types` no esté formateado** (hoy `cargo fmt --check -p cerebro_types` da diferencias) y cuesta minutos de runner. Propuesta: mantener (es útil como puerta del workspace) y exigir `cargo fmt` a todos los crates. |
+| `integration-tests.yaml` | igual, más `pctx-py/**` | **Sí** | Compila `pctx` en release y ejecuta `scripts/test-mcp-cli.sh`: tarda y solo prueba el binario de upstream. Propuesta: restringir sus `paths` o desactivarlo en el fork, **previa consulta**. |
+| `ci-python.yaml` | `pctx-py/**` | Solo si alguien toca `pctx-py/` | Inocuo; ignorar. |
+| `release.yml` | solo `workflow_dispatch` (input `tag`) | **No** automáticamente; sí si alguien lo lanza a mano | Generado por cargo-dist (`dist-workspace.toml`): `dry-run` por defecto, pero con un tag real publicaría artefactos y llamaría a `sync-helm`. Propuesta: no lanzarlo nunca desde este repo; valorar quitar los workflows de release. |
+| `sync-helm.yaml` | `workflow_call` desde `release.yml` | No directamente | Usa secretos `AUTOMATION_APP_ID/KEY` y `HELM_REPO` que **no existen** aquí: fallaría, sin efecto externo. |
+| `release-python.yml` | `workflow_dispatch` | Solo a mano | Idem; no lanzar. |
+| `test-windows.yml` | `workflow_dispatch` (PR comentado) | Solo a mano | Inocuo. |
+
+Nuestro `cerebro-ci.yml` es independiente y corre en push (`main`, `ws/**`, `ccr-*`) y PR. Propuesta de acción (a decidir por el coordinador): (1) formatear `cerebro_types`; (2) acotar `integration-tests.yaml` a `workflow_dispatch`; (3) dejar `release*.yml` y `sync-helm.yaml` intactos pero documentados como "no usar".

@@ -1,0 +1,116 @@
+# CI propia de Cerebro (WS1). No toca los workflows de upstream (ci.yaml, integration-tests.yaml, release*.yml…).
+name: cerebro-ci
+
+on:
+  push:
+    branches: [main, "ws/**", "ccr-*"]
+    paths:
+      - "crates/**"
+      - "packages/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "rust-toolchain.toml"
+      - ".github/workflows/cerebro-ci.yml"
+  pull_request:
+    paths:
+      - "crates/**"
+      - "packages/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "rust-toolchain.toml"
+      - ".github/workflows/cerebro-ci.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: cerebro-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: 0
+
+jobs:
+  rust:
+    name: Rust (cerebro_* y parches pctx)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Dependencias de compilación
+        run: sudo apt-get update && sudo apt-get install -y build-essential libclang-dev libc6-dev
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: packages/package.json
+
+      # Los tests del hub y de WS4 usan los fixtures MCP compilados (packages/fixtures/dist).
+      - name: Compilar fixtures
+        working-directory: packages
+        run: pnpm install --frozen-lockfile && pnpm -r build
+
+      # Caché de ~/.cargo y target (clave por Cargo.lock; el binario de rusty_v8 va dentro de target).
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+            target
+          key: cerebro-cargo-${{ runner.os }}-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}
+          restore-keys: |
+            cerebro-cargo-${{ runner.os }}-
+
+      - name: Lista de crates cerebro_*
+        id: crates
+        run: |
+          pkgs=$(cargo metadata --no-deps --format-version 1 \
+            | python3 -c "import json,sys; print(' '.join('-p '+p['name'] for p in json.load(sys.stdin)['packages'] if p['name'].startswith('cerebro')))")
+          echo "flags=$pkgs" >> "$GITHUB_OUTPUT"
+          echo "Crates: $pkgs"
+
+      - name: cargo fmt --check (cerebro_* y crates pctx parcheados)
+        run: cargo fmt --check ${{ steps.crates.outputs.flags }} -p pctx_executor -p pctx_code_mode -p pctx_type_check_runtime
+
+      - name: cargo clippy -D warnings (solo cerebro_*)
+        # --no-deps: no se lintean las dependencias de ruta (pctx_*), que tienen avisos preexistentes de upstream.
+        run: cargo clippy ${{ steps.crates.outputs.flags }} --all-targets --no-deps -- -D warnings
+
+      - name: cargo test (cerebro_*)
+        run: cargo test ${{ steps.crates.outputs.flags }}
+
+      # Garantiza que los parches CEREBRO-PATCH no rompen los tests de upstream.
+      - name: cargo test (crates pctx parcheados)
+        run: cargo test -p pctx_executor -p pctx_code_mode -p pctx_type_check_runtime
+
+  packages:
+    name: TypeScript (packages/)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: packages/package.json
+      - uses: actions/cache@v4
+        with:
+          path: ~/.local/share/pnpm/store
+          key: cerebro-pnpm-${{ runner.os }}-${{ hashFiles('packages/pnpm-lock.yaml') }}
+      - name: pnpm install, build y test
+        working-directory: packages
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm -r build
+          pnpm -r test
