@@ -1,0 +1,27 @@
+[package]
+name = "cerebro_hub"
+version = "0.0.1"
+description = "Hub downstream de Cerebro: clientes MCP (rmcp 3.11) registrados como callbacks de pctx, con política, aprobaciones y auditoría"
+edition.workspace = true
+rust-version.workspace = true
+license = "LicenseRef-ForgeX-Internal"
+publish = false
+
+[lints]
+workspace = true
+
+[dependencies]
+cerebro_types = { path = "../cerebro_types" }
+cerebro_policy = { path = "../cerebro_policy" }
+pctx_code_mode = { path = "../pctx_code_mode" }
+rmcp = { version = "3.11", default-features = false, features = ["client", "transport-child-process"] }
+blake3 = "1.8"
+serde = { workspace = true }
+serde_json = { workspace = true }
+anyhow = { workspace = true }
+tokio = { workspace = true, features = ["sync", "time", "process", "rt", "macros"] }
+tracing = { workspace = true }
+
+[dev-dependencies]
+cerebro_store = { path = "../cerebro_store" }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
