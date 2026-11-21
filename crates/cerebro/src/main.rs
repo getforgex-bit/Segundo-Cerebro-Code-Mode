@@ -3,6 +3,7 @@
 use std::path::PathBuf;
 
 use anyhow::Context;
+use cerebro::backend::Backend;
 use cerebro::backend::HubApi as _;
 use cerebro::config::{CerebroConfig, ProjectPaths};
 use cerebro::server::CerebroServer;
@@ -52,52 +53,12 @@ enum Cmd {
     },
 }
 
-/// Construye backend + límites. Con la feature `mock` usa los mocks en memoria; sin ella
-/// requiere el hub real (WS3), aún no integrado.
-#[cfg(feature = "mock")]
+/// Backend de producción (hub real). `--features mock` solo para tests.
 fn backend(
     paths: &ProjectPaths,
-    _cfg: &CerebroConfig,
-) -> anyhow::Result<cerebro::backend::Backend<cerebro::mock::MockHub>> {
-    tracing::warn!("hub MOCK con Store y búsqueda reales (solo desarrollo)");
-    let store = cerebro_store::Store::open(&cerebro_store::StorePaths {
-        brain_db: paths.brain_db.clone(),
-        hub_db: paths.hub_db.clone(),
-    })?;
-    Ok(cerebro::mock::store_backend(store, _cfg.approvals.mode))
-}
-
-#[cfg(not(feature = "mock"))]
-fn backend(
-    _paths: &ProjectPaths,
-    _cfg: &CerebroConfig,
-) -> anyhow::Result<cerebro::backend::Backend<NoHub>> {
-    anyhow::bail!(
-        "cerebro_hub/cerebro_store aún no integrados en este binario; compila con --features mock"
-    )
-}
-
-#[cfg(not(feature = "mock"))]
-enum NoHub {}
-#[cfg(not(feature = "mock"))]
-impl cerebro::backend::HubApi for NoHub {
-    async fn sync_catalog(&self) -> anyhow::Result<cerebro::backend::SyncSummary> {
-        match *self {}
-    }
-    fn callback_configs(&self) -> anyhow::Result<Vec<pctx_code_mode::model::CallbackConfig>> {
-        match *self {}
-    }
-    fn build_registry(
-        &self,
-        _: &str,
-        _: Vec<String>,
-    ) -> anyhow::Result<(
-        pctx_code_mode::registry::PctxRegistry,
-        Box<dyn cerebro::backend::ExecScope>,
-    )> {
-        match *self {}
-    }
-    async fn shutdown(&self) {}
+    cfg: &CerebroConfig,
+) -> anyhow::Result<Backend<cerebro::backend::RealHub>> {
+    cerebro::backend::real_backend(paths, cfg)
 }
 
 fn load(

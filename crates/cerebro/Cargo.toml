@@ -17,6 +17,8 @@ mock = []
 
 [dependencies]
 cerebro_types = { path = "../cerebro_types" }
+cerebro_hub = { path = "../cerebro_hub" }
+cerebro_policy = { path = "../cerebro_policy" }
 cerebro_store = { path = "../cerebro_store" }
 cerebro_search = { path = "../cerebro_search" }
 pctx_code_mode = { path = "../pctx_code_mode" }

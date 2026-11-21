@@ -4,9 +4,9 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use cerebro_types::{CerebroErrorPayload, ErrorCode, ExecutionRecord, SearchOpts, ServerStatus};
-use pctx_code_mode::CodeMode;
 use pctx_code_mode::config::ToolDisclosure;
 use pctx_code_mode::model::{FunctionId, GetFunctionDetailsInput};
+use pctx_code_mode::{CodeMode, ExecuteTypescriptOptions};
 use rmcp::ErrorData as McpError;
 use rmcp::RoleServer;
 use rmcp::handler::server::ServerHandler;
@@ -171,6 +171,12 @@ impl<H: HubApi> CerebroServer<H> {
         };
 
         let cm = self.code_mode.clone();
+        let opts = ExecuteTypescriptOptions {
+            timeout: Some(Duration::from_millis(self.limits.timeout_ms)),
+            heap_limit_bytes: usize::try_from(self.limits.heap_limit_mb)
+                .ok()
+                .and_then(|mb| mb.checked_mul(1024 * 1024)),
+        };
         let code = args.code;
         let span = tracing::Span::current();
         let handle = tokio::task::spawn_blocking(move || {
@@ -181,44 +187,59 @@ impl<H: HubApi> CerebroServer<H> {
                 .build()
                 .map_err(|e| anyhow::anyhow!("no se pudo crear el runtime: {e}"))?;
             rt.block_on(async {
-                cm.execute_typescript(&code, ToolDisclosure::Catalog, Some(registry))
-                    .await
-                    .map_err(|e| anyhow::anyhow!("{e}"))
+                cm.execute_typescript_with_options(
+                    &code,
+                    ToolDisclosure::Catalog,
+                    Some(registry),
+                    opts,
+                )
+                .await
+                .map_err(|e| anyhow::anyhow!("{e}"))
             })
         });
-        // TODO(WS1-parche timeout): este timeout NO mata el hilo de Deno; solo deja de
-        // esperar. Sustituir cuando WS1 exponga el timeout del executor en `CodeMode`.
-        let res = tokio::time::timeout(Duration::from_millis(self.limits.timeout_ms), handle).await;
-
-        let (success, output, stdout, stderr, status) = match res {
-            Err(_) => (
-                false,
-                Value::Null,
-                String::new(),
-                CerebroErrorPayload {
-                    code: ErrorCode::Timeout,
-                    message: format!("execution exceeded {} ms", self.limits.timeout_ms),
-                    approval_token: None,
-                    suggestions: vec![],
-                }
-                .to_callback_error(),
-                "timeout",
-            ),
-            Ok(Err(join)) => (
+        // Timeout y heap los aplica el propio executor (parche CEREBRO-PATCH de WS1): el hilo
+        // de Deno se detiene de verdad al vencer el plazo.
+        let join_res = handle.await;
+        let (success, output, stdout, stderr, status) = match join_res {
+            Err(join) => (
                 false,
                 Value::Null,
                 String::new(),
                 format!("execution task failed: {join}"),
                 "error",
             ),
-            Ok(Ok(Err(e))) => (false, Value::Null, String::new(), e.to_string(), "error"),
-            Ok(Ok(Ok(o))) => (
-                o.success,
-                o.output.clone().unwrap_or(Value::Null),
-                o.stdout.clone(),
-                o.stderr.clone(),
-                if o.success { "ok" } else { "error" },
-            ),
+            Ok(Err(e)) => (false, Value::Null, String::new(), e.to_string(), "error"),
+            Ok(Ok(o)) => {
+                let timed_out = !o.success && o.stderr.contains("Execution exceeded");
+                let stderr = if timed_out {
+                    CerebroErrorPayload {
+                        code: ErrorCode::Timeout,
+                        message: format!(
+                            "execution exceeded {} ms and was stopped",
+                            self.limits.timeout_ms
+                        ),
+                        approval_token: None,
+                        suggestions: vec![],
+                    }
+                    .to_callback_error()
+                } else {
+                    o.stderr.clone()
+                };
+                let status = if timed_out {
+                    "timeout"
+                } else if o.success {
+                    "ok"
+                } else {
+                    "error"
+                };
+                (
+                    o.success,
+                    o.output.clone().unwrap_or(Value::Null),
+                    o.stdout.clone(),
+                    stderr,
+                    status,
+                )
+            }
         };
 
         let mut truncated = false;

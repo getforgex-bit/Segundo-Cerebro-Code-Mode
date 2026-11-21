@@ -16,7 +16,7 @@ cerebro serve --stdio [--project <dir>] [--config <ruta>]
 {
   "servers": [{ "name": "echo", "command": "node", "args": ["packages/fixtures/dist/echo.js"] }],
   "policy": { "default_unknown": "confirm", "overrides": { "echo.*": "allow" } },
-  "limits": { "timeout_ms": 10000, "max_result_bytes": 20000 },
+  "limits": { "timeout_ms": 10000, "max_result_bytes": 20000, "heap_limit_mb": 256 },
   "approvals": { "mode": "out_of_band" }
 }
 ```

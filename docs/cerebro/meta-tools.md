@@ -35,7 +35,7 @@ Anotaciones MCP: `search_functions`, `get_function_details`, `cerebro_recall` y 
 5. `calls`: `[{tool, ms, ok, decision, result_bytes}]` de cada llamada a una herramienta downstream.
 6. Audita la ejecución (`code_hash = blake3(code)`, estado, bytes, duración).
 
-**Limitación conocida (Fase 0):** el timeout (`limits.timeout_ms`) usa `tokio::time::timeout` y devuelve `TIMEOUT`, pero **no mata el hilo de Deno**: un bucle infinito sigue consumiendo CPU hasta que termine el proceso. Pendiente de un parche mínimo de WS1 para exponer el timeout del executor.
+**Límites:** `limits.timeout_ms` (por defecto 10 000) y `limits.heap_limit_mb` (256) se aplican con `CodeMode::execute_typescript_with_options` (parche CEREBRO-PATCH de WS1): al vencer el plazo el executor detiene el script y `error.code` es `TIMEOUT`; el heap de V8 tiene un tope duro. El E2E comprueba que `while(true){}` con `timeout_ms: 2000` devuelve el error en < 5 s y que el servidor sigue vivo.
 
 ## Aprobaciones
 

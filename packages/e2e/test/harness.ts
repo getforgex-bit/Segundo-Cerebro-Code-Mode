@@ -12,7 +12,7 @@ export const cerebroBin = process.env.CEREBRO_BIN ?? join(repoRoot, "target/debu
 export const fixturesDist = join(repoRoot, "packages/fixtures/dist");
 
 export const binExists = existsSync(cerebroBin);
-/** Con el hub real, los fixtures hacen falta; con el binario `--features mock` no. */
+/** Variante opcional: `CEREBRO_MOCK=1` permite correr sin fixtures (el binario real nunca usa mocks). */
 export const mockBinary = process.env.CEREBRO_MOCK === "1";
 export const fixturesBuilt =
   existsSync(join(fixturesDist, "echo.js")) && existsSync(join(fixturesDist, "destructive.js"));
@@ -39,6 +39,7 @@ export interface ExecResult {
 export async function startSession(opts: {
   approvalsMode?: "out_of_band" | "client_confirm";
   policy?: Record<string, unknown>;
+  limits?: Record<string, unknown>;
 }): Promise<Session> {
   const project = mkdtempSync(join(tmpdir(), "cerebro-e2e-"));
   mkdirSync(join(project, ".cerebro"));
@@ -50,7 +51,7 @@ export async function startSession(opts: {
         { name: "destructive", command: "node", args: [join(fixturesDist, "destructive.js")] },
       ],
       policy: opts.policy ?? { default_unknown: "confirm", overrides: { "echo.*": "allow" } },
-      limits: { timeout_ms: 10000, max_result_bytes: 20000 },
+      limits: { timeout_ms: 10000, max_result_bytes: 20000, ...(opts.limits ?? {}) },
       approvals: { mode: opts.approvalsMode ?? "out_of_band" },
     }),
   );

@@ -4,19 +4,20 @@
 //! la forma de `cerebro_hub::DownstreamServer` y `cerebro_policy::PolicyConfig`.
 //! En la integración se sustituyen por esos tipos (mismo JSON).
 
-use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 use anyhow::Context;
+use cerebro_hub::DownstreamServer;
+use cerebro_policy::PolicyConfig;
 use serde::Deserialize;
 
 /// Raíz de `.cerebro/config.json`.
 #[derive(Debug, Clone, Default, Deserialize)]
 pub struct CerebroConfig {
     #[serde(default)]
-    pub servers: Vec<ServerEntry>,
+    pub servers: Vec<DownstreamServer>,
     #[serde(default)]
-    pub policy: PolicySection,
+    pub policy: PolicyConfig,
     #[serde(default)]
     pub limits: Limits,
     /// Modo de aprobación (por defecto `out_of_band`). Se pasa al hub.
@@ -31,33 +32,14 @@ pub struct ApprovalsSection {
     pub mode: cerebro_types::ApprovalMode,
 }
 
-/// Servidor downstream (espejo de `cerebro_hub::DownstreamServer`).
-#[derive(Debug, Clone, PartialEq, Deserialize)]
-pub struct ServerEntry {
-    pub name: String,
-    pub command: String,
-    #[serde(default)]
-    pub args: Vec<String>,
-    #[serde(default)]
-    pub env: BTreeMap<String, String>,
-    pub cwd: Option<PathBuf>,
-}
-
-/// Sección de política (espejo de `cerebro_policy::PolicyConfig`).
-#[derive(Debug, Clone, Default, PartialEq, Deserialize)]
-pub struct PolicySection {
-    /// `allow` | `confirm` | `deny`. Por defecto `confirm`.
-    pub default_unknown: Option<String>,
-    #[serde(default)]
-    pub overrides: BTreeMap<String, String>,
-}
-
 /// Límites de `execute_typescript`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
 #[serde(default)]
 pub struct Limits {
     pub timeout_ms: u64,
     pub max_result_bytes: usize,
+    /// Límite duro del heap de V8 por ejecución, en MiB.
+    pub heap_limit_mb: u64,
 }
 
 impl Default for Limits {
@@ -65,6 +47,7 @@ impl Default for Limits {
         Self {
             timeout_ms: 10_000,
             max_result_bytes: 20_000,
+            heap_limit_mb: 256,
         }
     }
 }
@@ -122,22 +105,12 @@ impl CerebroConfig {
                 s.name
             );
         }
-        for rule in self
-            .policy
-            .default_unknown
-            .iter()
-            .chain(self.policy.overrides.values())
-        {
-            anyhow::ensure!(
-                matches!(rule.as_str(), "allow" | "confirm" | "deny"),
-                "regla de política desconocida: {rule}"
-            );
-        }
         anyhow::ensure!(
             self.limits.max_result_bytes > 0,
             "max_result_bytes debe ser > 0"
         );
         anyhow::ensure!(self.limits.timeout_ms > 0, "timeout_ms debe ser > 0");
+        anyhow::ensure!(self.limits.heap_limit_mb > 0, "heap_limit_mb debe ser > 0");
         Ok(())
     }
 }
@@ -158,7 +131,7 @@ mod tests {
         .unwrap();
         assert_eq!(cfg.servers.len(), 1);
         assert_eq!(cfg.servers[0].args, vec!["packages/fixtures/dist/echo.js"]);
-        assert_eq!(cfg.policy.overrides["echo.*"], "allow");
+        assert_eq!(cfg.policy.overrides["echo.*"], cerebro_policy::Rule::Allow);
         assert_eq!(cfg.limits, Limits::default());
     }
 

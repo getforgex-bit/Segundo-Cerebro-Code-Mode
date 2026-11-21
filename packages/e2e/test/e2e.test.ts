@@ -12,7 +12,7 @@ if (!runnable) {
   );
 }
 
-const DELETE = "async function run(){ return await Destructive.deleteItem({ id: '42' }); }";
+const DELETE = "async function run(){ return await Destructive.deleteItem({ id: '1' }); }";
 
 d("cerebro E2E (client_confirm)", () => {
   let s: Session;
@@ -113,5 +113,27 @@ d("cerebro E2E (out_of_band)", () => {
     expect(r2.success).toBe(true);
     const r3 = await s.exec(DELETE, [token]);
     expect(r3.success).toBe(false);
+  });
+});
+
+d("cerebro E2E (timeout)", () => {
+  let s: Session;
+  beforeAll(async () => {
+    s = await startSession({ approvalsMode: "client_confirm", limits: { timeout_ms: 2000 } });
+  });
+  afterAll(async () => {
+    await s?.close();
+  });
+
+  it("while(true){} con timeout_ms=2000 devuelve error en < 5 s", async () => {
+    const t0 = Date.now();
+    const r = await s.exec("async function run(){ while (true) {} }");
+    const dt = Date.now() - t0;
+    expect(r.success).toBe(false);
+    expect((r.error as { code: string }).code).toBe("TIMEOUT");
+    expect(dt).toBeLessThan(5000);
+    // El servidor sigue vivo tras el timeout.
+    const ok = await s.exec("async function run(){ return await Echo.echo({ text: 'vivo' }); }");
+    expect(ok.success).toBe(true);
   });
 });

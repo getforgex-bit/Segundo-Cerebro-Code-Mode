@@ -53,3 +53,76 @@ pub struct Backend<H: HubApi> {
     pub format_hits: FormatHits,
     pub hub: Arc<H>,
 }
+
+// ───────────────────────── Hub real (WS3) ─────────────────────────
+
+impl ExecScope for cerebro_hub::ExecutionScope {
+    fn calls(&self) -> Vec<CallSummary> {
+        cerebro_hub::ExecutionScope::calls(self)
+    }
+    fn raw_bytes(&self) -> u64 {
+        cerebro_hub::ExecutionScope::raw_bytes(self)
+    }
+}
+
+/// Adaptador de `Arc<cerebro_hub::Hub>` al trait local [`HubApi`].
+pub struct RealHub(pub Arc<cerebro_hub::Hub>);
+
+impl HubApi for RealHub {
+    async fn sync_catalog(&self) -> anyhow::Result<SyncSummary> {
+        let r = self.0.sync_catalog().await?;
+        for w in &r.warnings {
+            tracing::warn!("{w}");
+        }
+        Ok(SyncSummary {
+            servers_ok: r.servers_ok,
+            servers_failed: r.servers_failed,
+            tools: r.tools,
+        })
+    }
+    fn callback_configs(&self) -> anyhow::Result<Vec<CallbackConfig>> {
+        self.0.callback_configs()
+    }
+    fn build_registry(
+        &self,
+        execution_id: &str,
+        approvals: Vec<String>,
+    ) -> anyhow::Result<(PctxRegistry, Box<dyn ExecScope>)> {
+        let (reg, scope) = self.0.build_registry(execution_id, approvals)?;
+        Ok((reg, Box::new(scope)))
+    }
+    async fn shutdown(&self) {
+        self.0.shutdown().await;
+    }
+}
+
+/// Backend de producción: `Store` + `SqliteToolSearch` + `Hub` reales.
+/// Debe llamarse dentro del runtime tokio principal (el hub guarda su `Handle`).
+pub fn real_backend(
+    paths: &crate::config::ProjectPaths,
+    cfg: &crate::config::CerebroConfig,
+) -> anyhow::Result<Backend<RealHub>> {
+    let store = cerebro_store::Store::open(&cerebro_store::StorePaths {
+        brain_db: paths.brain_db.clone(),
+        hub_db: paths.hub_db.clone(),
+    })?;
+    let store = Arc::new(store);
+    let hub = cerebro_hub::Hub::new(
+        cerebro_hub::HubConfig {
+            servers: cfg.servers.clone(),
+            approval_mode: cfg.approvals.mode,
+            ..cerebro_hub::HubConfig::default()
+        },
+        store.clone(),
+        store.clone(),
+        store.clone(),
+        cerebro_policy::Policy::new(cfg.policy.clone()),
+    );
+    Ok(Backend {
+        catalog: store.clone(),
+        search: Arc::new(cerebro_search::SqliteToolSearch::new((*store).clone())),
+        audit: store,
+        format_hits: cerebro_search::format_hits,
+        hub: Arc::new(RealHub(hub)),
+    })
+}
