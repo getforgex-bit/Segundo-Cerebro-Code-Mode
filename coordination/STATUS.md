@@ -31,6 +31,10 @@ _Última actualización: 2026-11-21 18:30 UTC._
 | 2026-11-21 | Sesiones de trabajo en **Sonnet 5.5** y coordinador en **Opus 5.5** (petición del usuario); relevo de las 4 sesiones | — |
 | 2026-11-21 | `format_hits` muestra `ts_namespace.ts_name` (CONTRACTS §4) | Consulta de WS2: que la IA use el mismo nombre en búsqueda, detalles y código |
 | 2026-11-21 | Política: readOnly y destructive a la vez → Confirm (CONTRACTS §2) | Seguridad: ante anotaciones contradictorias gana lo más restrictivo |
+| 2026-11-21 | Namespaces en PascalCase según pctx; `ts_namespace` y `ts_name` se calculan con las funciones de `pctx_codegen` | Hallazgo de WS4: coherencia entre búsqueda, detalles y código |
+| 2026-11-21 | Callbacks del hub vía `main_handle.spawn(...)` | Los callbacks corren en un runtime efímero (`spawn_blocking`) |
+| 2026-11-21 | Aprobaciones por token en la Fase 0; MRTR (`CallToolResponse::InputRequired`) en la Fase 1 | Viable en rmcp 3.11, pero sin probar con clientes |
+| 2026-11-21 | **Parche aprobado** a pctx (WS1): exponer en `CodeMode` el timeout del executor sin romper la API | Hoy `tokio::time::timeout` no mata el hilo de Deno |
 | 2026-11-21 | rmcp 3.11 en nuestros crates y 1.8 en los de pctx, sin tocar el workspace | Mínima divergencia del fork |
 
 ## Integraciones
