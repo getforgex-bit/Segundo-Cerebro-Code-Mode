@@ -387,9 +387,12 @@ async fn infinite_loop_is_stopped_by_timeout() {
     assert!(res.stderr.contains("exceeded 1s"), "{}", res.stderr);
 
     // Tras un timeout, el proceso sigue sirviendo ejecuciones.
-    let res = pctx_executor::execute("async function run() { return 2; }\nexport default await run();", pctx_executor::ExecuteOptions::new())
-        .await
-        .unwrap();
+    let res = pctx_executor::execute(
+        "async function run() { return 2; }\nexport default await run();",
+        pctx_executor::ExecuteOptions::new(),
+    )
+    .await
+    .unwrap();
     assert_eq!(res.output, Some(json!(2)));
 }
 
@@ -553,4 +556,175 @@ fn memory_bomb_kills_the_host_process() {
 fn tail(s: &str) -> String {
     let lines: Vec<&str> = s.lines().collect();
     lines[lines.len().saturating_sub(6)..].join("\n")
+}
+
+// ───────────── Parche CEREBRO-PATCH (límites de heap/tiempo/type-check) ─────────────
+
+const MB: usize = 1024 * 1024;
+
+const BOMB_FN: &str = "async function run() { const a: string[] = []; while (true) { a.push('x'.repeat(1024) + a.length); } }";
+const BOMB: &str = "async function run() { const a: string[] = []; while (true) { a.push('x'.repeat(1024) + a.length); } }\nexport default await run();";
+
+/// Con `heap_limit` la bomba de memoria se corta y el host sigue vivo (en el mismo proceso).
+#[tokio::test]
+#[serial]
+async fn memory_bomb_is_stopped_with_heap_limit() {
+    let start = Instant::now();
+    let res = pctx_executor::execute(
+        BOMB,
+        pctx_executor::ExecuteOptions::new()
+            .with_heap_limit(64 * MB)
+            .with_timeout(Duration::from_secs(60)),
+    )
+    .await
+    .unwrap();
+    eprintln!("[heap limit] {:?} stderr = {}", start.elapsed(), res.stderr);
+    assert!(!res.success);
+    assert!(
+        res.stderr.contains("Memory limit of 64 MB"),
+        "{}",
+        res.stderr
+    );
+
+    // El host sigue sirviendo ejecuciones (V8_MUTEX liberado, isolate nuevo).
+    let res = pctx_executor::execute(
+        "async function run() { return 3; }\nexport default await run();",
+        pctx_executor::ExecuteOptions::new().with_heap_limit(64 * MB),
+    )
+    .await
+    .unwrap();
+    assert_eq!(res.output, Some(json!(3)));
+}
+
+/// Lo mismo a través de la API de `CodeMode` (la que usará WS4).
+#[tokio::test]
+#[serial]
+async fn code_mode_options_stop_memory_bomb_and_timeout() {
+    let cm = CodeMode::default();
+    let out = cm
+        .execute_typescript_with_options(
+            BOMB_FN,
+            ToolDisclosure::Catalog,
+            Some(PctxRegistry::default()),
+            pctx_code_mode::ExecuteTypescriptOptions {
+                heap_limit_bytes: Some(64 * MB),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+    assert!(!out.success);
+    assert!(out.stderr.contains("Memory limit"), "{}", out.stderr);
+
+    let start = Instant::now();
+    let out = cm
+        .execute_typescript_with_options(
+            "async function run() { while (true) {} }",
+            ToolDisclosure::Catalog,
+            Some(PctxRegistry::default()),
+            pctx_code_mode::ExecuteTypescriptOptions {
+                timeout: Some(Duration::from_secs(1)),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+    assert!(!out.success);
+    assert!(out.stderr.contains("exceeded 1s"), "{}", out.stderr);
+    assert!(start.elapsed() < Duration::from_secs(10));
+
+    // Con opciones por defecto el comportamiento es el de siempre.
+    let out = cm
+        .execute_typescript(
+            "async function run() { return 5; }",
+            ToolDisclosure::Catalog,
+            Some(PctxRegistry::default()),
+        )
+        .await
+        .unwrap();
+    assert_eq!(out.output, Some(json!(5)));
+}
+
+/// El type-check se corta por tiempo en lugar de colgarse reteniendo el mutex de V8.
+#[tokio::test]
+#[serial]
+async fn type_check_timeout_stops_the_check() {
+    let res = pctx_executor::execute(
+        "async function run() { return 1; }\nexport default await run();",
+        pctx_executor::ExecuteOptions::new()
+            .with_type_check_timeout(Some(Duration::from_millis(1))),
+    )
+    .await
+    .unwrap();
+    eprintln!(
+        "[type-check timeout] success={} stderr={}",
+        res.success, res.stderr
+    );
+    assert!(!res.success);
+    assert!(res.stderr.contains("Type check exceeded"), "{}", res.stderr);
+
+    // Y luego sigue funcionando.
+    let res = pctx_executor::execute(
+        "async function run() { return 1; }\nexport default await run();",
+        pctx_executor::ExecuteOptions::new(),
+    )
+    .await
+    .unwrap();
+    assert!(res.success, "{}", res.stderr);
+}
+
+/// Una bomba de memoria dentro del type-check (tipos recursivos) no tumba el host con `heap_limit`.
+#[tokio::test]
+#[serial]
+async fn type_check_heap_limit_survives() {
+    // Unión de ~65k miembros por producto cartesiano: costoso en tiempo y memoria para tsc.
+    let code = r#"
+type D = 0|1|2|3|4|5|6|7|8|9;
+type T2 = `${D}${D}`; type T4 = `${T2}${T2}`; type T6 = `${T4}${T2}`; type T8 = `${T6}${T2}`;
+const x: T8 = "x";
+async function run() { return x; }
+export default await run();
+"#;
+    let res = pctx_executor::execute(
+        code,
+        pctx_executor::ExecuteOptions::new()
+            .with_heap_limit(128 * MB)
+            .with_type_check_timeout(Some(Duration::from_secs(20))),
+    )
+    .await
+    .unwrap();
+    eprintln!(
+        "[type-check pesado] success={} stderr={}",
+        res.success,
+        tail(&res.stderr)
+    );
+    assert!(!res.success);
+    // Pase lo que pase (límite de heap, timeout o error de tipos), el host sobrevive:
+    let res = pctx_executor::execute(
+        "async function run() { return 1; }\nexport default await run();",
+        pctx_executor::ExecuteOptions::new(),
+    )
+    .await
+    .unwrap();
+    assert!(res.success, "{}", res.stderr);
+}
+
+/// Informativo: memoria fuera del heap de V8 (ArrayBuffer). El límite de heap no la cubre.
+#[tokio::test]
+#[serial]
+async fn arraybuffer_allocation_behaviour() {
+    let res = pctx_executor::execute(
+        "async function run() { const b = new Uint8Array(3 * 1024 * 1024 * 1024); return b.length; }\nexport default await run();",
+        pctx_executor::ExecuteOptions::new()
+            .with_heap_limit(64 * MB)
+            .with_timeout(Duration::from_secs(20)),
+    )
+    .await
+    .unwrap();
+    eprintln!(
+        "[arraybuffer 3GB] success={} output={:?} stderr={}",
+        res.success,
+        res.output,
+        tail(&res.stderr)
+    );
 }

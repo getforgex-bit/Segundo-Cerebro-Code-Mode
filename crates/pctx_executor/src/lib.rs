@@ -6,7 +6,10 @@ use deno_core::error::CoreError;
 use futures::lock::Mutex;
 use pctx_registry::PctxRegistry;
 pub use pctx_type_check_runtime::{CheckResult, Diagnostic, is_relevant_error};
-use pctx_type_check_runtime::{init_v8_platform, type_check};
+use pctx_type_check_runtime::{
+    TypeCheckError, TypeCheckOptions, heap_create_params, init_v8_platform, install_heap_guard,
+    type_check_with_options,
+};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -37,10 +40,19 @@ pub type Result<T> = std::result::Result<T, DenoExecutorError>;
 /// How long a script may run before it is stopped.
 pub const DEFAULT_TIMEOUT: Duration = Duration::from_secs(120);
 
+// CEREBRO-PATCH: el type-check también necesita un tope de tiempo (antes podía colgar y retener V8_MUTEX).
+/// How long the type check may run before it is stopped.
+pub const DEFAULT_TYPE_CHECK_TIMEOUT: Duration = Duration::from_secs(60);
+
 #[derive(Clone)]
 pub struct ExecuteOptions {
     pub registry: PctxRegistry,
     pub timeout: Duration,
+    // CEREBRO-PATCH: límite de heap de V8 (None = el de V8 por defecto, como upstream) y timeout del type-check.
+    /// Hard V8 heap limit in bytes for both the type check and the execution.
+    pub heap_limit_bytes: Option<usize>,
+    /// Stop the type check after this long (default [`DEFAULT_TYPE_CHECK_TIMEOUT`]).
+    pub type_check_timeout: Option<Duration>,
 }
 
 impl Default for ExecuteOptions {
@@ -48,6 +60,8 @@ impl Default for ExecuteOptions {
         Self {
             registry: PctxRegistry::default(),
             timeout: DEFAULT_TIMEOUT,
+            heap_limit_bytes: None,
+            type_check_timeout: Some(DEFAULT_TYPE_CHECK_TIMEOUT),
         }
     }
 }
@@ -57,6 +71,8 @@ impl std::fmt::Debug for ExecuteOptions {
         f.debug_struct("ExecuteOptions")
             .field("registry", &self.registry.ids())
             .field("timeout", &self.timeout)
+            .field("heap_limit_bytes", &self.heap_limit_bytes)
+            .field("type_check_timeout", &self.type_check_timeout)
             .finish()
     }
 }
@@ -79,6 +95,21 @@ impl ExecuteOptions {
     #[must_use]
     pub fn with_timeout(mut self, timeout: Duration) -> Self {
         self.timeout = timeout;
+        self
+    }
+
+    // CEREBRO-PATCH: setters de los nuevos campos.
+    /// Cap the V8 heap (bytes). When hit, the script is terminated instead of aborting the process.
+    #[must_use]
+    pub fn with_heap_limit(mut self, bytes: usize) -> Self {
+        self.heap_limit_bytes = Some(bytes);
+        self
+    }
+
+    /// Stop the type check after `timeout` (`None` disables the limit).
+    #[must_use]
+    pub fn with_type_check_timeout(mut self, timeout: Option<Duration>) -> Self {
+        self.type_check_timeout = timeout;
         self
     }
 }
@@ -161,7 +192,13 @@ pub async fn execute(code: &str, options: ExecuteOptions) -> Result<ExecuteResul
     let _guard = V8_MUTEX.lock().await;
 
     let typecheck_started_at = SystemTime::now();
-    let check_result = run_type_check(code)?;
+    let check_result = run_type_check(
+        code,
+        TypeCheckOptions {
+            timeout: options.type_check_timeout,
+            heap_limit_bytes: options.heap_limit_bytes,
+        },
+    )?;
     let typecheck_ended_at = SystemTime::now();
 
     // Check if we have diagnostics
@@ -252,8 +289,25 @@ pub async fn execute(code: &str, options: ExecuteOptions) -> Result<ExecuteResul
 }
 
 #[tracing::instrument(skip(code), fields(runtime = "type_check", code_length = code.len()))]
-fn run_type_check(code: &str) -> Result<CheckResult> {
-    let mut check_result = type_check(code)?;
+fn run_type_check(code: &str, options: TypeCheckOptions) -> Result<CheckResult> {
+    // CEREBRO-PATCH: un timeout/heap en el type-check es un fallo del código del usuario, no de la infraestructura:
+    // se devuelve como diagnóstico para que `execute` produzca un `ExecuteResult` fallido normal.
+    let mut check_result = match type_check_with_options(code, options) {
+        Ok(r) => r,
+        Err(e @ (TypeCheckError::Timeout(_) | TypeCheckError::HeapLimitExceeded(_))) => {
+            return Ok(CheckResult {
+                success: false,
+                diagnostics: vec![Diagnostic {
+                    message: e.to_string(),
+                    line: None,
+                    column: None,
+                    severity: "error".to_string(),
+                    code: None,
+                }],
+            });
+        }
+        Err(e) => return Err(e.into()),
+    };
 
     if !check_result.success && !check_result.diagnostics.is_empty() {
         // filter for only relevant diagnostics
@@ -393,8 +447,14 @@ async fn execute_code(
         module_loader: Some(Rc::new(deno_core::NoopModuleLoader)),
         startup_snapshot: Some(pctx_code_execution_runtime::RUNTIME_SNAPSHOT),
         extensions,
+        create_params: heap_create_params(options.heap_limit_bytes), // CEREBRO-PATCH: límite de heap
         ..Default::default()
     });
+    // CEREBRO-PATCH: al acercarse al límite se termina el script en vez de abortar el proceso.
+    let heap_exceeded = Arc::new(AtomicBool::new(false));
+    if options.heap_limit_bytes.is_some() {
+        install_heap_guard(&mut js_runtime, heap_exceeded.clone());
+    }
 
     // Create the main module specifier
     let main_module = deno_core::resolve_url("file:///execute.js")?;
@@ -462,6 +522,28 @@ async fn execute_code(
     drop(finished);
     let _ = watchdog.join();
 
+    // CEREBRO-PATCH: distinguir el corte por heap del corte por tiempo.
+    if heap_exceeded.load(Ordering::SeqCst) {
+        let limit = options.heap_limit_bytes.unwrap_or(0);
+        warn!(
+            heap_limit_bytes = limit,
+            "Execution exceeded the heap limit"
+        );
+        return Ok(InternalExecuteResult {
+            success: false,
+            output: None,
+            error: Some(ExecutionError {
+                message: format!(
+                    "Memory limit of {} MB exceeded and execution was stopped",
+                    limit / (1024 * 1024)
+                ),
+                stack: None,
+            }),
+            stdout: String::new(),
+            stderr: String::new(),
+            registry: options.registry,
+        });
+    }
     let (eval_result, event_loop_result) = match joined {
         Ok(results) if !terminated.load(Ordering::SeqCst) => results,
         _ => {

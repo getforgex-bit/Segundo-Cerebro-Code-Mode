@@ -18,6 +18,17 @@ use crate::{
     },
 };
 
+// CEREBRO-PATCH: opciones de ejecución de `execute_typescript_with_options`.
+/// Execution limits for [`CodeMode::execute_typescript_with_options`].
+/// `None` fields keep upstream's defaults (120 s timeout, V8's default heap).
+#[derive(Debug, Clone, Copy, Default)]
+pub struct ExecuteTypescriptOptions {
+    /// Stop the script after this long.
+    pub timeout: Option<std::time::Duration>,
+    /// Hard V8 heap limit in bytes; when hit, the script is stopped and the host survives.
+    pub heap_limit_bytes: Option<usize>,
+}
+
 #[derive(Clone, Default, Debug, Serialize, Deserialize)]
 pub struct CodeMode {
     // Codegen interfaces
@@ -596,6 +607,26 @@ export default result;"#,
         disclosure: ToolDisclosure,
         registry: Option<PctxRegistry>,
     ) -> Result<ExecuteTypescriptOutput> {
+        // CEREBRO-PATCH: delega en la versión con opciones usando los valores por defecto de upstream.
+        self.execute_typescript_with_options(
+            code,
+            disclosure,
+            registry,
+            ExecuteTypescriptOptions::default(),
+        )
+        .await
+    }
+
+    // CEREBRO-PATCH: expone timeout y límite de heap, que `execute_typescript` fijaba en 120 s y sin límite.
+    /// Same as [`CodeMode::execute_typescript`] with explicit execution limits.
+    #[instrument(skip(self, registry, code), err)]
+    pub async fn execute_typescript_with_options(
+        &self,
+        code: &str,
+        disclosure: ToolDisclosure,
+        registry: Option<PctxRegistry>,
+        opts: ExecuteTypescriptOptions,
+    ) -> Result<ExecuteTypescriptOutput> {
         let registry: PctxRegistry = if let Some(r) = registry {
             r
         } else {
@@ -707,11 +738,15 @@ export default result;"#,
 
         trace!("Executing TypeScript in sandbox:\n{to_execute}");
 
-        let execution_res = pctx_executor::execute(
-            &to_execute,
-            pctx_executor::ExecuteOptions::new().with_registry(registry),
-        )
-        .await?;
+        // CEREBRO-PATCH: aplicar las opciones de ejecución.
+        let mut exec_opts = pctx_executor::ExecuteOptions::new().with_registry(registry);
+        if let Some(timeout) = opts.timeout {
+            exec_opts = exec_opts.with_timeout(timeout);
+        }
+        if let Some(bytes) = opts.heap_limit_bytes {
+            exec_opts = exec_opts.with_heap_limit(bytes);
+        }
+        let execution_res = pctx_executor::execute(&to_execute, exec_opts).await?;
 
         if execution_res.success {
             info!(

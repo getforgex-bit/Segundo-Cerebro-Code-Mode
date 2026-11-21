@@ -75,6 +75,10 @@ use deno_core::JsRuntime;
 use deno_core::RuntimeOptions;
 use serde::{Deserialize, Serialize};
 use std::rc::Rc;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::mpsc::{RecvTimeoutError, channel};
+use std::time::Duration;
 use thiserror::Error;
 
 /// Result type alias for type checking operations
@@ -90,6 +94,47 @@ pub enum TypeCheckError {
     /// Error parsing the TypeScript code
     #[error("Parse error: {0}")]
     ParseError(String),
+
+    // CEREBRO-PATCH: el type-check ahora puede cortarse por tiempo o por heap en vez de colgar o abortar el host.
+    /// The type check ran longer than the allowed time and was stopped.
+    #[error("Type check exceeded {0:?} and was stopped")]
+    Timeout(Duration),
+
+    // CEREBRO-PATCH: ver arriba.
+    /// The V8 heap reached its limit and the isolate was stopped.
+    #[error("Memory limit of {0} bytes exceeded and execution was stopped")]
+    HeapLimitExceeded(usize),
+}
+
+// CEREBRO-PATCH: límite de heap de V8 compartido por el type-check y el executor.
+// Sin él, una bomba de memoria hace abortar (OOM fatal) todo el proceso host.
+/// Build V8 `CreateParams` with a hard heap limit. `None` keeps V8's defaults.
+pub fn heap_create_params(limit_bytes: Option<usize>) -> Option<deno_core::v8::CreateParams> {
+    // CEREBRO-PATCH: ver arriba.
+    limit_bytes.map(|max| deno_core::v8::CreateParams::default().heap_limits(0, max))
+}
+
+/// Install a near-heap-limit callback on `js_runtime`: when V8 gets close to the limit it
+/// sets `exceeded`, terminates the script and raises the limit a bit so V8 does not abort
+/// the whole process while the termination propagates.
+pub fn install_heap_guard(js_runtime: &mut JsRuntime, exceeded: Arc<AtomicBool>) {
+    // CEREBRO-PATCH: ver arriba.
+    let handle = js_runtime.v8_isolate().thread_safe_handle();
+    js_runtime.add_near_heap_limit_callback(move |current, _initial| {
+        exceeded.store(true, Ordering::SeqCst);
+        handle.terminate_execution();
+        current + (current / 2).max(32 * 1024 * 1024)
+    });
+}
+
+// CEREBRO-PATCH: opciones del type-check (tiempo y heap).
+/// Limits for a single type check. The default (`None`/`None`) matches upstream behavior.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct TypeCheckOptions {
+    /// Stop the type check after this long.
+    pub timeout: Option<Duration>,
+    /// Hard V8 heap limit in bytes.
+    pub heap_limit_bytes: Option<usize>,
 }
 
 /// A single type checking diagnostic (error or warning)
@@ -188,6 +233,17 @@ pub fn init_v8_platform() {
 /// # }
 /// ```
 pub fn type_check(code: &str) -> Result<CheckResult> {
+    type_check_with_options(code, TypeCheckOptions::default())
+}
+
+/// Same as [`type_check`] but with a timeout and/or heap limit.
+///
+/// # Errors
+///
+/// In addition to [`type_check`]'s errors, returns [`TypeCheckError::Timeout`] or
+/// [`TypeCheckError::HeapLimitExceeded`] when a limit is hit.
+// CEREBRO-PATCH: versión con límites; `type_check` delega aquí con los valores por defecto.
+pub fn type_check_with_options(code: &str, options: TypeCheckOptions) -> Result<CheckResult> {
     // First do a quick syntax check with deno_ast
     let parse_result = deno_ast::parse_module(deno_ast::ParseParams {
         specifier: deno_ast::ModuleSpecifier::parse("file:///check.ts")
@@ -221,14 +277,49 @@ pub fn type_check(code: &str) -> Result<CheckResult> {
         module_loader: Some(Rc::new(deno_core::NoopModuleLoader)),
         startup_snapshot: Some(TYPE_CHECK_SNAPSHOT),
         extensions: vec![pctx_type_check_snapshot::init()],
+        create_params: heap_create_params(options.heap_limit_bytes), // CEREBRO-PATCH: límite de heap
         ..Default::default()
     });
 
+    // CEREBRO-PATCH: guardia de heap + watchdog de timeout para el type-check.
+    let heap_exceeded = Arc::new(AtomicBool::new(false));
+    if options.heap_limit_bytes.is_some() {
+        install_heap_guard(&mut js_runtime, heap_exceeded.clone());
+    }
+    let timed_out = Arc::new(AtomicBool::new(false));
+    let (finished, finished_rx) = channel::<()>();
+    let watchdog = options.timeout.map(|timeout| {
+        let isolate = js_runtime.v8_isolate().thread_safe_handle();
+        let timed_out = timed_out.clone();
+        std::thread::spawn(move || {
+            if finished_rx.recv_timeout(timeout) == Err(RecvTimeoutError::Timeout) {
+                timed_out.store(true, Ordering::SeqCst);
+                isolate.terminate_execution();
+            }
+        })
+    });
+    let stop_watchdog = move || {
+        drop(finished);
+        if let Some(w) = watchdog {
+            let _ = w.join();
+        }
+    };
+    let classify = |e: String| -> TypeCheckError {
+        if heap_exceeded.load(Ordering::SeqCst) {
+            TypeCheckError::HeapLimitExceeded(options.heap_limit_bytes.unwrap_or(0))
+        } else if timed_out.load(Ordering::SeqCst) {
+            TypeCheckError::Timeout(options.timeout.unwrap_or_default())
+        } else {
+            TypeCheckError::InternalError(e)
+        }
+    };
+
     // Inject TypeScript lib files as a global variable
     let inject_libs_script = format!("globalThis.TS_LIBS = {};", TS_LIBS_JSON);
-    js_runtime
-        .execute_script("<inject_ts_libs>", inject_libs_script)
-        .map_err(|e| TypeCheckError::InternalError(format!("Failed to inject TS_LIBS: {}", e)))?;
+    if let Err(e) = js_runtime.execute_script("<inject_ts_libs>", inject_libs_script) {
+        stop_watchdog();
+        return Err(classify(format!("Failed to inject TS_LIBS: {}", e)));
+    }
 
     // Call the type checking function from the runtime
     let code_json =
@@ -243,9 +334,14 @@ pub fn type_check(code: &str) -> Result<CheckResult> {
         "
     );
 
-    let result = js_runtime
-        .execute_script("<type_check>", check_script)
-        .map_err(|e| TypeCheckError::InternalError(e.to_string()))?;
+    let result = match js_runtime.execute_script("<type_check>", check_script) {
+        Ok(r) => r,
+        Err(e) => {
+            stop_watchdog();
+            return Err(classify(e.to_string()));
+        }
+    };
+    stop_watchdog();
 
     // Extract the result using v8 scope
     let check_result = {
