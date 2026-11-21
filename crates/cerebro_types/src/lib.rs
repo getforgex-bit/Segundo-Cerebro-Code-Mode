@@ -134,6 +134,10 @@ impl Default for SearchOpts {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ToolHit {
     pub tool: ToolRecord,
+    /// Namespace TS visible del servidor (PascalCase, `ServerRecord::ts_namespace`): lo
+    /// rellena la búsqueda desde el catálogo para que `format_hits` muestre
+    /// `ts_namespace.ts_name` sin recalcularlo.
+    pub ts_namespace: String,
     /// Mayor es mejor (RRF de BM25 + trigram).
     pub score: f64,
 }
