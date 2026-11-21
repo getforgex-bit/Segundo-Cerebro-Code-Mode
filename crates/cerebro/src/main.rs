@@ -45,11 +45,15 @@ enum Cmd {
 /// requiere el hub real (WS3), aún no integrado.
 #[cfg(feature = "mock")]
 fn backend(
-    _paths: &ProjectPaths,
+    paths: &ProjectPaths,
     _cfg: &CerebroConfig,
 ) -> anyhow::Result<cerebro::backend::Backend<cerebro::mock::MockHub>> {
-    tracing::warn!("usando backend MOCK (solo desarrollo)");
-    Ok(cerebro::mock::mock_backend().0)
+    tracing::warn!("hub MOCK con Store y búsqueda reales (solo desarrollo)");
+    let store = cerebro_store::Store::open(&cerebro_store::StorePaths {
+        brain_db: paths.brain_db.clone(),
+        hub_db: paths.hub_db.clone(),
+    })?;
+    Ok(cerebro::mock::store_backend(store))
 }
 
 #[cfg(not(feature = "mock"))]

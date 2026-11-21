@@ -116,6 +116,7 @@ impl ToolSearch for MockStore {
                 let hay = format!("{} {} {}", t.server, t.name, t.description).to_lowercase();
                 let score = terms.iter().filter(|w| hay.contains(w.as_str())).count();
                 (score > 0).then(|| ToolHit {
+                    ts_namespace: pascal(&t.server),
                     tool: t.clone(),
                     score: score as f64,
                 })
@@ -139,7 +140,7 @@ pub fn format_hits(hits: &[ToolHit], detail: Detail) -> String {
     hits.iter()
         .map(|h| {
             let t = &h.tool;
-            let id = format!("{}.{}", pascal(&t.server), t.ts_name);
+            let id = format!("{}.{}", h.ts_namespace, t.ts_name);
             let mark = if t.read_only_hint() == Some(true) {
                 "[read]"
             } else if t.destructive_hint() == Some(true) {
@@ -262,11 +263,11 @@ impl ExecScope for ScopeHandle {
 
 /// Hub falso: las herramientas responden en proceso, sin servidores downstream.
 pub struct MockHub {
-    store: Arc<MockStore>,
+    store: Arc<dyn Catalog>,
 }
 
 impl MockHub {
-    pub fn new(store: Arc<MockStore>) -> Self {
+    pub fn new(store: Arc<dyn Catalog>) -> Self {
         Self { store }
     }
 }
@@ -389,4 +390,17 @@ pub fn mock_backend() -> (Backend<MockHub>, Arc<MockStore>) {
         hub: Arc::new(MockHub::new(store.clone())),
     };
     (backend, store)
+}
+
+/// Backend con el `Store` y la búsqueda REALES (WS2) y el hub falso: para probar el
+/// cableado de persistencia sin el hub de WS3.
+pub fn store_backend(store: cerebro_store::Store) -> Backend<MockHub> {
+    let store = Arc::new(store);
+    Backend {
+        catalog: store.clone(),
+        search: Arc::new(cerebro_search::SqliteToolSearch::new((*store).clone())),
+        audit: store.clone(),
+        format_hits: cerebro_search::format_hits,
+        hub: Arc::new(MockHub::new(store)),
+    }
 }

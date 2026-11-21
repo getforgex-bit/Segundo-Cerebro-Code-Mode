@@ -1036,6 +1036,8 @@ version = "0.0.1"
 dependencies = [
  "anyhow",
  "blake3",
+ "cerebro_search",
+ "cerebro_store",
  "cerebro_types",
  "clap",
  "pctx_code_mode",

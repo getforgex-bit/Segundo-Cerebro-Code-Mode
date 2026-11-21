@@ -470,6 +470,30 @@ mod tests {
         assert!(r.contains("\\\"success\\\":false"), "{r}");
     }
 
+    #[tokio::test(flavor = "multi_thread")]
+    async fn real_store_and_search() {
+        let store = cerebro_store::Store::open_in_memory().unwrap();
+        let server = CerebroServer::start(crate::mock::store_backend(store), Limits::default())
+            .await
+            .unwrap();
+        let (s_io, c_io) = tokio::io::duplex(1 << 20);
+        tokio::spawn(async move {
+            let _ = server.serve(s_io).await.unwrap().waiting().await;
+        });
+        let c = ().serve(c_io).await.unwrap();
+        let s = call(&c, "search_functions", json!({"query": "echo text"})).await;
+        let first = s.find("Echo.echo").expect(&s);
+        assert!(s.find("Echo.add").is_none_or(|i| i > first), "{s}");
+        let r = call(
+            &c,
+            "execute_typescript",
+            json!({"code":
+            "async function run(){ return await Echo.add({a:2,b:3}); }"}),
+        )
+        .await;
+        assert!(r.contains("\\\"success\\\":true"), "{r}");
+    }
+
     #[tokio::test]
     async fn stubs_and_primer() {
         let (c, _) = connect().await;
