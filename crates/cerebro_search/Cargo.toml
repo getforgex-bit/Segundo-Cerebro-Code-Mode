@@ -1,0 +1,13 @@
+[package]
+name = "cerebro_search"
+version = "0.0.1"
+description = "Búsqueda de herramientas de Cerebro sobre FTS5 (BM25 + trigram, RRF)"
+edition.workspace = true
+rust-version.workspace = true
+license = "LicenseRef-ForgeX-Internal"
+publish = false
+
+[dependencies]
+cerebro_types = { path = "../cerebro_types" }
+cerebro_store = { path = "../cerebro_store" }
+anyhow = { workspace = true }
