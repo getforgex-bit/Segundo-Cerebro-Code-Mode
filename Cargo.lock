@@ -1009,6 +1009,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "cerebro_policy"
+version = "0.0.1"
+dependencies = [
+ "cerebro_types",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "cerebro_types"
 version = "0.0.1"
 dependencies = [

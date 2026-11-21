@@ -1,0 +1,18 @@
+[package]
+name = "cerebro_policy"
+version = "0.0.1"
+description = "Política allow/confirm/deny de Cerebro para llamadas a herramientas downstream"
+edition.workspace = true
+rust-version.workspace = true
+license = "LicenseRef-ForgeX-Internal"
+publish = false
+
+[lints]
+workspace = true
+
+[dependencies]
+cerebro_types = { path = "../cerebro_types" }
+serde = { workspace = true }
+
+[dev-dependencies]
+serde_json = { workspace = true }
