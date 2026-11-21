@@ -5,6 +5,12 @@ import { binExists, callText, fixturesBuilt, mockBinary, startSession, type Sess
 // con el motivo (CONTRACTS §6).
 const runnable = binExists && (mockBinary || fixturesBuilt);
 const d = runnable ? describe : describe.skip;
+// En CI (CEREBRO_E2E_REQUIRED=1) un E2E que no puede ejecutarse es un fallo, no un "omitido".
+if (!runnable && process.env.CEREBRO_E2E_REQUIRED === "1") {
+  throw new Error(
+    `E2E requerido pero no ejecutable: binario=${binExists} fixtures=${fixturesBuilt} mock=${mockBinary}`,
+  );
+}
 if (!runnable) {
   console.warn(
     `E2E omitido: binario=${binExists} fixtures=${fixturesBuilt} mock=${mockBinary}. ` +

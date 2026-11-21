@@ -6,8 +6,8 @@ _Última actualización: 2026-11-21 ~23:00 UTC: cierre de la Fase 0 en curso y o
 
 | Equipo | Coordinador | Estado |
 |---|---|---|
-| A · Claude Code | Opus 5.5 · `session_018vGgtDkbBcKozrRZMWdwQz` | Cerrando la Fase 0; a continuación, Issues `team:a` (Fase 1) |
-| B · Antigravity | Gemini 4 Neon | **Pendiente de arranque**: el usuario pega `teams/NEON-BOOTSTRAP.md` cuando se cumplan las condiciones de arranque (ADR 0007) |
+| A · Claude Code | Opus 5.5 · `session_018vGgtDkbBcKozrRZMWdwQz` | **Fase 0 cerrada**; siguiente: Issues `team:a` #7–#11 (Fase 1) |
+| B · Antigravity | Gemini 4 Neon | **Condiciones de arranque cumplidas**: falta que el usuario pegue `teams/NEON-BOOTSTRAP.md` en Antigravity |
 
 ### Issues abiertos clave
 
@@ -38,10 +38,10 @@ _Última actualización: 2026-11-21 ~23:00 UTC: cierre de la Fase 0 en curso y o
 
 | WS | Sesión | Estado | Último hito | Bloqueos |
 |---|---|---|---|---|
-| WS1 fork | `session_018vGgtBtNgZCaQfUuawSJgp` (Sonnet 5.5) | en curso | relevo @ 0d3af74: spike de 15 tests (12 en verde), hallazgos en CONTRACTS | — |
+| WS1 fork | `session_018vGgtBtNgZCaQfUuawSJgp` (Sonnet 5.5) | **completo** | final 1cc7838: UPSTREAM, ADR 0002/0003, CI; parche C1–C3 | — |
 | WS2 store | `session_018vGgtEA1LZaw9ewZ6jA8ar` (Sonnet 5.5) | **completo** (en reposo) | permisos + .gitignore + threat-model (8320e98) | — |
-| WS3 hub | `session_018vGgtDYGGyXHNEKu9BV2jF` (Sonnet 5.5) | en curso (corrección de la política → hub) | fixtures integrados; política @ 0b7e4ba; relevo @ 56ea568 | — |
-| WS4 server | `session_018vGgtC1ESwsgNGC3g87aZ1` (Sonnet 5.5) | en curso (docs H4 + esqueleto E2E; espera el hub de WS3) | @ 66c1596: servidor rmcp 3.11 con 6 herramientas, Store y Search reales, 12 tests; **tools/list = 2064 bytes ≈ 516 tokens** | hub real (WS3) |
+| WS3 hub | `session_018vGgtDYGGyXHNEKu9BV2jF` (Sonnet 5.5) | **completo** | hub v2 1593537 (policy 9 + hub 19 tests) | — |
+| WS4 server | `session_018vGgtC1ESwsgNGC3g87aZ1` (Sonnet 5.5) | **completo** | final bf77252: hub real por defecto, límites (timeout + heap 256 MB) y E2E 10/10 sin mock; tools/list = 2096 B ≈ 524 tokens | — |
 
 ## Decisiones del coordinador
 
@@ -71,6 +71,14 @@ _Última actualización: 2026-11-21 ~23:00 UTC: cierre de la Fase 0 en curso y o
 | 2026-11-21 | rmcp 3.11 en nuestros crates y 1.8 en los de pctx, sin tocar el workspace | Mínima divergencia del fork |
 
 ## Integraciones
+
+- **2026-11-21 · cierre de la Fase 0:** WS3 (f493d05), parche WS1 (4815294), WS1 final, WS4 final y CI con E2E real obligatorio. Verificado por el coordinador:
+  - store 16, search 11, policy 9, hub 19, types 2 y cerebro 15 tests;
+  - clippy `--no-deps` limpio;
+  - **E2E 10/10 contra el binario real**;
+  - la CI falla, en lugar de omitir, si el E2E no puede ejecutarse.
+
+  Se crea **`develop`**.
 
 | Fecha | WS | Commit | Verificación |
 |---|---|---|---|

@@ -93,6 +93,13 @@ jobs:
       - name: cargo test (crates pctx parcheados)
         run: cargo test -p pctx_executor -p pctx_code_mode -p pctx_type_check_runtime
 
+      - name: E2E contra el binario real (falla si no puede ejecutarse)
+        env:
+          CEREBRO_E2E_REQUIRED: "1"
+        run: |
+          cargo build -p cerebro
+          pnpm -C packages/e2e test
+
   packages:
     name: TypeScript (packages/)
     runs-on: ubuntu-latest
