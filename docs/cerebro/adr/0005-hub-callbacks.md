@@ -25,7 +25,7 @@ Cerebro debe interponerse en **toda** llamada a un servidor MCP downstream para 
 - `ToolRecord` no tiene `available`; una herramienta descartada por colisión simplemente no se cataloga.
 - `ToolRecord.ts_signature` la rellena el hub con una firma compacta derivada del `inputSchema` (`Ns.fn({ a: string, b?: number }): Promise<any>`); la salida se muestra como `any`.
 - `HubConfig` gana `approval_mode` (orden del coordinador, `ApprovalMode`).
-- Las llamadas a herramientas inexistentes no generan registro de auditoría (`ToolCallRecord` exige una decisión que no existe).
+- Las llamadas a herramientas inexistentes no generan registro de auditoría (`ToolCallRecord` exige una decisión que no existe). Aprobado para la Fase 0; **pendiente de la Fase 1**.
 
 ## MRTR (fuera de la Fase 0)
 
