@@ -128,7 +128,8 @@ pub fn all() -> Vec<Tool> {
              call tools as `await Namespace.fn(args)`. Only the return value reaches you, \
              so filter and aggregate in code. Returns JSON \
              {success, output, stdout, error?, calls, truncated}. If error.code is \
-             NEEDS_APPROVAL, ask the user, then rerun with approvals: [error.approval_token].",
+             NEEDS_APPROVAL, follow error.message (the user must approve), then rerun with \
+             approvals: [error.approval_token].",
             json!({
                 "type": "object",
                 "properties": {
