@@ -32,6 +32,17 @@ enum Cmd {
         #[arg(long)]
         config: Option<PathBuf>,
     },
+    /// Lista las aprobaciones pendientes.
+    Approvals {
+        #[arg(long, default_value = ".")]
+        project: PathBuf,
+    },
+    /// Aprueba (como humano, en una terminal interactiva) una aprobación pendiente.
+    Approve {
+        token: String,
+        #[arg(long, default_value = ".")]
+        project: PathBuf,
+    },
     /// Sincroniza el catálogo e imprime el resumen.
     Sync {
         #[arg(long, default_value = ".")]
@@ -53,7 +64,7 @@ fn backend(
         brain_db: paths.brain_db.clone(),
         hub_db: paths.hub_db.clone(),
     })?;
-    Ok(cerebro::mock::store_backend(store))
+    Ok(cerebro::mock::store_backend(store, _cfg.approvals.mode))
 }
 
 #[cfg(not(feature = "mock"))]
@@ -99,6 +110,55 @@ fn load(
     Ok((paths, cfg))
 }
 
+fn open_store(project: PathBuf) -> anyhow::Result<cerebro_store::Store> {
+    let paths = ProjectPaths::new(&project, None);
+    cerebro_store::Store::open(&cerebro_store::StorePaths {
+        brain_db: paths.brain_db,
+        hub_db: paths.hub_db,
+    })
+}
+
+/// La aprobación debe hacerla un humano: se exige TTY en stdin y stdout, sin escapes.
+fn ensure_interactive(stdin_tty: bool, stdout_tty: bool) -> anyhow::Result<()> {
+    anyhow::ensure!(
+        stdin_tty && stdout_tty,
+        "la aprobación tiene que hacerla un humano en una terminal interactiva (stdin y stdout \
+         deben ser una TTY); no se puede aprobar desde un agente, pipe o script"
+    );
+    Ok(())
+}
+
+fn approve_cmd(token: &str, project: PathBuf) -> anyhow::Result<()> {
+    use std::io::{BufRead, IsTerminal, Write};
+    ensure_interactive(
+        std::io::stdin().is_terminal(),
+        std::io::stdout().is_terminal(),
+    )?;
+    let store = open_store(project)?;
+    let info = cerebro_types::ApprovalStore::list_pending(&store)?
+        .into_iter()
+        .find(|a| a.token == token)
+        .context("no hay una aprobación pendiente con ese token (¿expiró o ya se usó?)")?;
+    println!("Herramienta: {}", info.tool);
+    println!("Motivo:      {}", info.reason);
+    println!("Ejecución:   {}", info.execution_id);
+    println!("Expira:      {}", info.expires_at);
+    print!("¿Aprobar esta llamada? [y/N] ");
+    std::io::stdout().flush()?;
+    let mut line = String::new();
+    std::io::stdin().lock().read_line(&mut line)?;
+    if matches!(line.trim(), "y" | "Y") {
+        anyhow::ensure!(
+            cerebro_types::ApprovalStore::approve(&store, token)?,
+            "no se pudo aprobar (expiró o ya estaba aprobada)"
+        );
+        println!("Aprobada. Pide a la IA que reintente con approvals: [\"{token}\"].");
+    } else {
+        println!("No aprobada.");
+    }
+    Ok(())
+}
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     tracing_subscriber::fmt()
@@ -123,6 +183,20 @@ async fn main() -> anyhow::Result<()> {
             running.waiting().await?;
             server.shutdown().await;
         }
+        Cmd::Approvals { project } => {
+            let store = open_store(project)?;
+            let list = cerebro_types::ApprovalStore::list_pending(&store)?;
+            if list.is_empty() {
+                println!("(sin aprobaciones pendientes)");
+            }
+            for a in list {
+                println!(
+                    "{}  {}  expira {}  — {}",
+                    a.token, a.tool, a.expires_at, a.reason
+                );
+            }
+        }
+        Cmd::Approve { token, project } => approve_cmd(&token, project)?,
         Cmd::Sync { project, config } => {
             let (paths, cfg) = load(project, config)?;
             let b = backend(&paths, &cfg)?;
@@ -135,4 +209,16 @@ async fn main() -> anyhow::Result<()> {
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::ensure_interactive;
+
+    #[test]
+    fn approve_refuses_without_tty() {
+        assert!(ensure_interactive(false, true).is_err());
+        assert!(ensure_interactive(true, false).is_err());
+        assert!(ensure_interactive(true, true).is_ok());
+    }
 }

@@ -12,8 +12,6 @@ use serde_json::{Value, json};
 
 use crate::backend::{Backend, ExecScope, HubApi, SyncSummary};
 
-pub const MOCK_APPROVAL_TOKEN: &str = "mock-approval-token";
-
 /// Catálogo + auditoría + aprobaciones + búsqueda, todo en memoria.
 #[derive(Default)]
 pub struct MockStore {
@@ -21,6 +19,8 @@ pub struct MockStore {
     tools: Mutex<Vec<ToolRecord>>,
     pub executions: Mutex<Vec<ExecutionRecord>>,
     pub tool_calls: Mutex<Vec<ToolCallRecord>>,
+    /// token → (info, args_hash, status: "pending" | "approved" | "consumed")
+    approvals: Mutex<Vec<(ApprovalInfo, String, &'static str)>>,
 }
 
 impl Catalog for MockStore {
@@ -87,14 +87,56 @@ impl AuditLog for MockStore {
 }
 
 impl ApprovalStore for MockStore {
-    fn create(&self, _req: &ApprovalRequest) -> Result<String> {
-        Ok(MOCK_APPROVAL_TOKEN.into())
+    fn create(&self, req: &ApprovalRequest) -> Result<String> {
+        let mut v = self.approvals.lock().unwrap();
+        let token = format!("mock-token-{}", v.len() + 1);
+        let info = ApprovalInfo {
+            token: token.clone(),
+            execution_id: req.execution_id.clone(),
+            tool: req.tool.clone(),
+            reason: req.reason.clone(),
+            created_at: String::new(),
+            expires_at: String::new(),
+        };
+        v.push((info, req.args_hash.clone(), "pending"));
+        Ok(token)
     }
     fn approve(&self, token: &str) -> Result<bool> {
-        Ok(token == MOCK_APPROVAL_TOKEN)
+        let mut v = self.approvals.lock().unwrap();
+        Ok(v.iter_mut()
+            .find(|(i, _, st)| i.token == token && *st == "pending")
+            .map(|e| e.2 = "approved")
+            .is_some())
     }
-    fn consume(&self, token: &str, _tool: &str, _args_hash: &str) -> Result<bool> {
-        Ok(token == MOCK_APPROVAL_TOKEN)
+    fn consume(
+        &self,
+        token: &str,
+        tool: &str,
+        args_hash: &str,
+        mode: ApprovalMode,
+    ) -> Result<bool> {
+        let mut v = self.approvals.lock().unwrap();
+        let Some(e) = v
+            .iter_mut()
+            .find(|(i, h, _)| i.token == token && i.tool == tool && h == args_hash)
+        else {
+            return Ok(false);
+        };
+        let ok = e.2 == "approved" || (e.2 == "pending" && mode == ApprovalMode::ClientConfirm);
+        if ok {
+            e.2 = "consumed";
+        }
+        Ok(ok)
+    }
+    fn list_pending(&self) -> Result<Vec<ApprovalInfo>> {
+        Ok(self
+            .approvals
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|e| e.2 == "pending")
+            .map(|e| e.0.clone())
+            .collect())
     }
 }
 
@@ -264,11 +306,21 @@ impl ExecScope for ScopeHandle {
 /// Hub falso: las herramientas responden en proceso, sin servidores downstream.
 pub struct MockHub {
     store: Arc<dyn Catalog>,
+    approvals: Arc<dyn ApprovalStore>,
+    mode: ApprovalMode,
 }
 
 impl MockHub {
-    pub fn new(store: Arc<dyn Catalog>) -> Self {
-        Self { store }
+    pub fn new(
+        store: Arc<dyn Catalog>,
+        approvals: Arc<dyn ApprovalStore>,
+        mode: ApprovalMode,
+    ) -> Self {
+        Self {
+            store,
+            approvals,
+            mode,
+        }
     }
 }
 
@@ -277,6 +329,9 @@ fn call_tool(
     name: &str,
     args: &Value,
     approvals: &[String],
+    store: &dyn ApprovalStore,
+    mode: ApprovalMode,
+    execution_id: &str,
 ) -> std::result::Result<Value, CerebroErrorPayload> {
     match (server, name) {
         ("echo", "echo") => Ok(json!({"text": args["text"]})),
@@ -285,16 +340,37 @@ fn call_tool(
         ),
         ("destructive", "read_item") => Ok(json!({"id": args["id"], "value": "stored"})),
         ("destructive", "delete_item") => {
-            if approvals.iter().any(|a| a == MOCK_APPROVAL_TOKEN) {
-                Ok(json!({"deleted": args["id"]}))
-            } else {
-                Err(CerebroErrorPayload {
-                    code: ErrorCode::NeedsApproval,
-                    message: "destructive.delete_item requires approval".into(),
-                    approval_token: Some(MOCK_APPROVAL_TOKEN.into()),
-                    suggestions: vec![],
-                })
+            let tool = "destructive.delete_item";
+            let args_hash = blake3::hash(args.to_string().as_bytes())
+                .to_hex()
+                .to_string();
+            for t in approvals {
+                if store.consume(t, tool, &args_hash, mode).unwrap_or(false) {
+                    return Ok(json!({"deleted": args["id"]}));
+                }
             }
+            let token = store
+                .create(&ApprovalRequest {
+                    execution_id: execution_id.into(),
+                    tool: tool.into(),
+                    args_hash,
+                    reason: "destructive".into(),
+                    ttl_seconds: 600,
+                })
+                .map_err(|e| CerebroErrorPayload {
+                    code: ErrorCode::ToolError,
+                    message: e.to_string(),
+                    approval_token: None,
+                    suggestions: vec![],
+                })?;
+            Err(CerebroErrorPayload {
+                code: ErrorCode::NeedsApproval,
+                message: format!(
+                    "Approval required: ask the user to run `cerebro approve {token}` in an interactive terminal, then retry with approvals: [\"{token}\"]"
+                ),
+                approval_token: Some(token),
+                suggestions: vec![],
+            })
         }
         _ => Err(CerebroErrorPayload {
             code: ErrorCode::ToolNotFound,
@@ -333,7 +409,7 @@ impl HubApi for MockHub {
 
     fn build_registry(
         &self,
-        _execution_id: &str,
+        execution_id: &str,
         approvals: Vec<String>,
     ) -> anyhow::Result<(PctxRegistry, Box<dyn ExecScope>)> {
         let registry = PctxRegistry::default();
@@ -346,6 +422,8 @@ impl HubApi for MockHub {
                 scope.clone(),
                 approvals.clone(),
             );
+            let (store, mode, exec_id) =
+                (self.approvals.clone(), self.mode, execution_id.to_string());
             registry.add_callback(
                 &id,
                 Arc::new(move |args: Option<Value>| {
@@ -355,9 +433,18 @@ impl HubApi for MockHub {
                         scope.clone(),
                         approvals.clone(),
                     );
+                    let (store, exec_id) = (store.clone(), exec_id.clone());
                     Box::pin(async move {
                         let started = Instant::now();
-                        let r = call_tool(&server, &name, &args.unwrap_or(Value::Null), &approvals);
+                        let r = call_tool(
+                            &server,
+                            &name,
+                            &args.unwrap_or(Value::Null),
+                            &approvals,
+                            store.as_ref(),
+                            mode,
+                            &exec_id,
+                        );
                         scope.calls.lock().unwrap().push(CallSummary {
                             tool: format!("{server}.{name}"),
                             ms: started.elapsed().as_millis() as u64,
@@ -380,27 +467,27 @@ impl HubApi for MockHub {
 }
 
 /// Backend completo con mocks. Devuelve también el store para inspeccionar la auditoría.
-pub fn mock_backend() -> (Backend<MockHub>, Arc<MockStore>) {
+pub fn mock_backend(mode: ApprovalMode) -> (Backend<MockHub>, Arc<MockStore>) {
     let store = Arc::new(MockStore::default());
     let backend = Backend {
         catalog: store.clone(),
         search: store.clone(),
         audit: store.clone(),
         format_hits,
-        hub: Arc::new(MockHub::new(store.clone())),
+        hub: Arc::new(MockHub::new(store.clone(), store.clone(), mode)),
     };
     (backend, store)
 }
 
 /// Backend con el `Store` y la búsqueda REALES (WS2) y el hub falso: para probar el
 /// cableado de persistencia sin el hub de WS3.
-pub fn store_backend(store: cerebro_store::Store) -> Backend<MockHub> {
+pub fn store_backend(store: cerebro_store::Store, mode: ApprovalMode) -> Backend<MockHub> {
     let store = Arc::new(store);
     Backend {
         catalog: store.clone(),
         search: Arc::new(cerebro_search::SqliteToolSearch::new((*store).clone())),
         audit: store.clone(),
         format_hits: cerebro_search::format_hits,
-        hub: Arc::new(MockHub::new(store)),
+        hub: Arc::new(MockHub::new(store.clone(), store, mode)),
     }
 }

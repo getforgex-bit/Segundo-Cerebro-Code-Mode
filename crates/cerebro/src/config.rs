@@ -19,6 +19,16 @@ pub struct CerebroConfig {
     pub policy: PolicySection,
     #[serde(default)]
     pub limits: Limits,
+    /// Modo de aprobación (por defecto `out_of_band`). Se pasa al hub.
+    #[serde(default)]
+    pub approvals: ApprovalsSection,
+}
+
+/// Bloque `"approvals": { "mode": "out_of_band" | "client_confirm" }`.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize)]
+pub struct ApprovalsSection {
+    #[serde(default)]
+    pub mode: cerebro_types::ApprovalMode,
 }
 
 /// Servidor downstream (espejo de `cerebro_hub::DownstreamServer`).
@@ -165,6 +175,16 @@ mod tests {
         assert!(CerebroConfig::from_json(dup).is_err());
         let bad = r#"{"policy":{"default_unknown":"maybe"}}"#;
         assert!(CerebroConfig::from_json(bad).is_err());
+    }
+
+    #[test]
+    fn approval_mode_parsing() {
+        use cerebro_types::ApprovalMode;
+        let d = CerebroConfig::from_json("{}").unwrap();
+        assert_eq!(d.approvals.mode, ApprovalMode::OutOfBand);
+        let c = CerebroConfig::from_json(r#"{"approvals":{"mode":"client_confirm"}}"#).unwrap();
+        assert_eq!(c.approvals.mode, ApprovalMode::ClientConfirm);
+        assert!(CerebroConfig::from_json(r#"{"approvals":{"mode":"nope"}}"#).is_err());
     }
 
     #[test]

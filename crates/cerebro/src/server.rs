@@ -363,6 +363,7 @@ impl<H: HubApi> ServerHandler for CerebroServer<H> {
 mod tests {
     use super::*;
     use crate::mock::mock_backend;
+    use cerebro_types::ApprovalStore;
     use rmcp::ServiceExt;
     use rmcp::model::CallToolRequestParams;
     use serde_json::json;
@@ -371,7 +372,16 @@ mod tests {
         rmcp::service::RunningService<rmcp::RoleClient, ()>,
         Arc<crate::mock::MockStore>,
     ) {
-        let (backend, store) = mock_backend();
+        connect_mode(cerebro_types::ApprovalMode::ClientConfirm).await
+    }
+
+    async fn connect_mode(
+        mode: cerebro_types::ApprovalMode,
+    ) -> (
+        rmcp::service::RunningService<rmcp::RoleClient, ()>,
+        Arc<crate::mock::MockStore>,
+    ) {
+        let (backend, store) = mock_backend(mode);
         let server = CerebroServer::start(backend, Limits::default())
             .await
             .unwrap();
@@ -440,14 +450,14 @@ mod tests {
         )
         .await;
         assert!(
-            r.contains("NEEDS_APPROVAL") && r.contains(crate::mock::MOCK_APPROVAL_TOKEN),
+            r.contains("NEEDS_APPROVAL") && r.contains("mock-token-1"),
             "{r}"
         );
 
         let r = call(
             &c,
             "execute_typescript",
-            json!({"approvals":[crate::mock::MOCK_APPROVAL_TOKEN], "code":
+            json!({"approvals":["mock-token-1"], "code":
             "async function run(){ return await Destructive.deleteItem({id:'1'}); }"}),
         )
         .await;
@@ -455,6 +465,43 @@ mod tests {
             r.contains("\\\"success\\\":true") && r.contains("deleted"),
             "{r}"
         );
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn out_of_band_requires_human_approval() {
+        let (c, store) = connect_mode(cerebro_types::ApprovalMode::OutOfBand).await;
+        let code = "async function run(){ return await Destructive.deleteItem({id:'1'}); }";
+        let r = call(&c, "execute_typescript", json!({"code": code})).await;
+        assert!(
+            r.contains("NEEDS_APPROVAL") && r.contains("cerebro approve mock-token-1"),
+            "{r}"
+        );
+        // La IA reenvía el token sin aprobación humana: sigue denegado.
+        let r = call(
+            &c,
+            "execute_typescript",
+            json!({"approvals":["mock-token-1"], "code": code}),
+        )
+        .await;
+        assert!(r.contains("NEEDS_APPROVAL"), "{r}");
+        assert_eq!(store.list_pending().unwrap().len(), 2);
+        // El humano aprueba fuera de banda.
+        assert!(store.approve("mock-token-1").unwrap());
+        let r = call(
+            &c,
+            "execute_typescript",
+            json!({"approvals":["mock-token-1"], "code": code}),
+        )
+        .await;
+        assert!(r.contains("deleted"), "{r}");
+        // Un solo uso.
+        let r = call(
+            &c,
+            "execute_typescript",
+            json!({"approvals":["mock-token-1"], "code": code}),
+        )
+        .await;
+        assert!(r.contains("NEEDS_APPROVAL"), "{r}");
     }
 
     #[tokio::test(flavor = "multi_thread")]
@@ -473,9 +520,12 @@ mod tests {
     #[tokio::test(flavor = "multi_thread")]
     async fn real_store_and_search() {
         let store = cerebro_store::Store::open_in_memory().unwrap();
-        let server = CerebroServer::start(crate::mock::store_backend(store), Limits::default())
-            .await
-            .unwrap();
+        let server = CerebroServer::start(
+            crate::mock::store_backend(store, cerebro_types::ApprovalMode::OutOfBand),
+            Limits::default(),
+        )
+        .await
+        .unwrap();
         let (s_io, c_io) = tokio::io::duplex(1 << 20);
         tokio::spawn(async move {
             let _ = server.serve(s_io).await.unwrap().waiting().await;
