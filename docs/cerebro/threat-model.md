@@ -106,7 +106,7 @@ Código: `crates/cerebro_store/src/lib.rs` (`impl ApprovalStore for Store`, **In
 | **R/T: reutilizar un token** | `consume` es un único `UPDATE … WHERE status IN ('pending','approved') AND expires_at > now` y exige exactamente 1 fila afectada: un solo uso, aun con concurrencia | — |
 | **E: usar el token para otra acción** | `consume` verifica `tool` **y** `args_hash`; un intento con otra herramienta o hash no quema el token (test `approval_wrong_tool_or_hash_does_not_burn_token`) | — |
 | **E: token caducado** | `expires_at = now + ttl` calculado en SQL; test de caducidad | Limpieza periódica de filas caducadas (hay índice `approvals_expires`) |
-| **E: la IA se auto-aprueba** | `approve` no está expuesto en la superficie MCP de la Fase 0 (CONTRACTS §3) | **Hueco importante:** `consume` acepta tokens en estado `pending`, por contrato. Con tokens propios, la IA recibe el token en el error `NEEDS_APPROVAL` y puede reenviarlo en `approvals` sin que un humano lo apruebe fuera de banda. En la Fase 0 la única barrera humana es que el **cliente MCP pida confirmación** al ver la segunda llamada a `execute_typescript`. Cuando exista un canal fuera de banda (MRTR/elicitation o `cerebro approve`), `consume` debe exigir `approved` |
+| **E: la IA se auto-aprueba** (ve el token en `NEEDS_APPROVAL` y lo reenvía) | **Integrado (c8a6df5):** `ApprovalStore::consume(token, tool, args_hash, mode)`; con `ApprovalMode::OutOfBand` (por defecto) solo acepta tokens `approved` y `approve` no está expuesto en la superficie MCP. `ClientConfirm` (opt-in, más débil) también acepta `pending` (CONTRACTS §2, «Aprobaciones»). Tests de `cerebro_store` | **Contrato, sin código:** `cerebro approve <token>` (WS4; se niega sin TTY interactiva) y el texto de `NEEDS_APPROVAL` del hub. **Riesgo residual:** un agente con shell y TTY emulada (p. ej. `script`, `expect`, un pty) podría ejecutar `cerebro approve` él mismo; la TTY sube el listón, no es una frontera. La mitigación definitiva es MRTR (Fase 1, prioridad 1): la confirmación la muestra la UI del cliente al humano sin pasar por la IA |
 | **T: reutilizar la aprobación en otra ejecución** | El token está ligado a `tool` y `args_hash`, no a `execution_id`: sirve en cualquier ejecución con la misma llamada exacta | Aceptable en la Fase 0 (misma acción, mismos argumentos); evaluar ligarlo a la sesión |
 | **I: el hash revela argumentos** | `args_hash` es blake3 de JSON canónico | Si los argumentos son de baja entropía, el hash permite confirmarlos por fuerza bruta: no exponerlo fuera de `approvals`/`tool_calls` |
 
@@ -122,11 +122,11 @@ Código: `crates/cerebro_store/src/lib.rs` (`impl ApprovalStore for Store`, **In
 
 | Amenaza | Existente | Pendiente |
 |---|---|---|
-| **I/T: otro proceso o usuario lee o altera `.cerebro/`** | Ninguno: `Store::open` usa `create_dir_all` y `Connection::open` con la *umask* del usuario (`crates/cerebro_store/src/lib.rs`) | **`.cerebro/` con permisos 0700 y archivos 0600** al crearlos |
+| **I/T: otro proceso o usuario lee o altera `.cerebro/`** | **Integrado (solo Unix):** `Store::open` crea el directorio de datos (padre de `brain_db`) con 0700 y endurece uno existente; crea las bases con 0600 (SQLite copia el modo a `-wal`/`-shm`). No toca los permisos de ancestros ni de directorios fuera de `.cerebro/`. Test `open_creates_private_layout_and_gitignore` (`crates/cerebro_store/src/lib.rs`) | Windows no recibe permisos restrictivos (se confía en la ACL heredada); cualquier proceso del mismo usuario sigue pudiendo leer el directorio |
 | **T: inyección SQL** | Toda consulta de datos usa parámetros (`params!`). Los nombres de tabla/columna dinámicos son constantes internas | — |
 | **T: inyección en la sintaxis FTS** | La consulta se parte en palabras alfanuméricas con `split_words` y cada término va entre comillas; el trigram solo genera subcadenas de esos términos (`crates/cerebro_search/src/lib.rs`, `fts_expr`/`trigram_expr`). El test `hostile_syntax_is_neutralised` prueba `OR`, comillas sin cerrar, `NEAR(` y `; DROP TABLE` | — |
 | **D: corrupción o bloqueo** | WAL, `busy_timeout=5000`, `foreign_keys=ON`, CHECK de enumerados y `json_valid`; migraciones idempotentes (test `disk_open_is_idempotent_and_persists`) | Copias de seguridad; `PRAGMA integrity_check` en `doctor` |
-| **I: secretos del repo** | — | `.cerebro/brain.db*`, `.cerebro/cache/` y `.cerebro/workspace/` deben ir en `.gitignore` del proyecto (PLAN V2.6); el `.gitignore` de este repo no los lista: lo escribirá la CLI (`cerebro init`), aún no existe |
+| **I: secretos del repo** | **Integrado:** `Store::open` crea `<dir>/.gitignore` si no existe, con `*.db`, `*.db-wal`, `*.db-shm`, `cache/` y `workspace/`; `brain/` queda versionable (ADR-0004). No sobrescribe uno existente (mismo test) | No protege contra `git add -f`; no cubre secretos escritos dentro de `brain/*.md` (ver S10) |
 | **I: datos en claro** | — | Sin cifrado en reposo; aceptado en la Fase 0 |
 
 ### S8. Catálogo y búsqueda (envenenamiento de herramientas)
@@ -178,8 +178,8 @@ Plan en PLAN §9: perfil `remote` restrictivo (todo lo que escribe pide confirma
 | 1 | Límite de heap de V8 (`CEREBRO-PATCH`) | Un código malicioso o con error tumba el proceso | WS1 (con aprobación) |
 | 2 | Timeout configurable en `CodeMode` | `limits.timeout_ms` no se aplica | WS1 |
 | 3 | Redacción de argumentos, errores y resultados en el hub | Secretos en `tool_calls` | WS3 |
-| 4 | `.cerebro/` en 0700/0600 y `.gitignore` | Lectura por otros usuarios; secretos al repo | WS2 (permisos) / WS4 (`init`) |
-| 5 | `consume` exige `approved` cuando exista canal fuera de banda (MRTR/CLI) | Auto-aprobación por la IA | WS3 / coordinador |
+| 4 | ~~`.cerebro/` en 0700/0600 y `.gitignore`~~ **Hecho en `cerebro_store` (solo Unix)**; falta Windows | Lectura por otros usuarios; secretos al repo | WS2 |
+| 5 | ~~`consume` exige `approved`~~ **Hecho (c8a6df5)**; faltan `cerebro approve` (WS4) y MRTR (Fase 1) | Auto-aprobación por la IA | WS4 / WS3 |
 | 6 | Alinear `readOnly`+`destructive` → `Confirm` en el código de `cerebro_policy` | Tool engañosa heredando `Allow` | WS3 |
 | 7 | Alertar si cambia `schema_hash` de una herramienta ya usada | *Rug pull* | WS3 |
 | 8 | Validar argumentos contra `input_schema` en el hub | Argumentos fuera de contrato | WS3 |
@@ -190,7 +190,7 @@ Plan en PLAN §9: perfil `remote` restrictivo (todo lo que escribe pide confirma
 
 1. **Añadir un servidor equivale a ejecutar su código** con los privilegios del usuario; no hay aislamiento de procesos.
 2. **Anotaciones MCP no verificables:** un servidor hostil puede declararse de solo lectura. La mitigación es que el usuario revise los servidores y use overrides.
-3. **Aprobación humana dependiente del cliente:** sin canal fuera de banda, la única confirmación real es la del cliente MCP.
+3. **Aprobación fuera de banda por TTY, no a prueba de agentes con shell:** el store exige `approved` por defecto, pero `cerebro approve` aún no existe y, cuando exista, un agente con TTY emulada podría usarlo. Con `ClientConfirm` (opt-in) la única confirmación real es la del cliente MCP. MRTR (Fase 1) es la mitigación definitiva.
 4. **Sin límite de heap hasta el parche:** una ejecución puede abortar el proceso. Se acepta porque el cliente reinicia el servidor stdio; se pierde la ejecución en curso.
 5. **Una ejecución a la vez** (`V8_MUTEX`): una ejecución lenta retrasa a las demás hasta su timeout.
 6. **Sin cifrado en reposo ni auditoría a prueba de manipulación:** quien tenga acceso de escritura a `.cerebro/` puede leer y alterar el historial.

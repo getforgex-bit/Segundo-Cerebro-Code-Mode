@@ -88,7 +88,7 @@ Envía un `[REPORTE]` al terminar cada hito de tu brief y **siempre** uno final,
 
 - Compila: `cargo build -p <tu crate>`, o `pnpm -r build` en TS.
 - Tests propios en verde: `cargo test -p <tu crate>`.
-- `cargo clippy -p <tu crate> -- -D warnings` sin avisos en **tus** crates.
+- `cargo clippy -p <tu crate> --all-targets --no-deps -- -D warnings` sin avisos. `--no-deps` evita que se analicen los crates de pctx.
 - `cargo fmt` aplicado.
 - Documentación del hito actualizada (doc comments y, si aplica, tu doc en `docs/cerebro/`).
 - Reporte enviado con la verificación **real**. Si algo no se verificó, se dice.

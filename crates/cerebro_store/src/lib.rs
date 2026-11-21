@@ -58,12 +58,7 @@ impl Store {
     /// Abre (o crea) ambas bases: crea los directorios, aplica pragmas y migraciones y
     /// adjunta `hub.db` como `hub`.
     pub fn open(paths: &StorePaths) -> Result<Self> {
-        for p in [&paths.brain_db, &paths.hub_db] {
-            if let Some(dir) = p.parent().filter(|d| !d.as_os_str().is_empty()) {
-                std::fs::create_dir_all(dir)
-                    .with_context(|| format!("creando el directorio {}", dir.display()))?;
-            }
-        }
+        prepare_layout(paths)?;
         // `user_version` va por archivo: el hub migra por su cuenta, antes del ATTACH.
         {
             let mut hub = Connection::open(&paths.hub_db)
@@ -136,6 +131,88 @@ impl Store {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
     }
+}
+
+/// `.gitignore` que se crea dentro del directorio de datos: lo local no se versiona y
+/// `brain/` (Markdown del equipo, ADR-0004) sí.
+const DATA_DIR_GITIGNORE: &str = "# Generado por Cerebro. Lo local no se versiona; `brain/` sí (ADR-0004).\n\
+*.db\n*.db-wal\n*.db-shm\ncache/\nworkspace/\n";
+
+/// Crea los directorios y archivos de las bases con permisos restrictivos (Unix: directorio
+/// de datos 0700, bases 0600) y el `.gitignore` del directorio de datos.
+///
+/// El directorio de datos es el padre de `brain_db` (`.cerebro/`). Solo ese directorio se
+/// crea con 0700 o se endurece si ya existía; los ancestros se crean con los permisos
+/// habituales y nunca se modifican los que ya existían. En Windows no se tocan permisos.
+fn prepare_layout(paths: &StorePaths) -> Result<()> {
+    let data_dir = paths
+        .brain_db
+        .parent()
+        .filter(|d| !d.as_os_str().is_empty());
+    if let Some(dir) = data_dir {
+        if let Some(ancestor) = dir.parent().filter(|a| !a.as_os_str().is_empty()) {
+            std::fs::create_dir_all(ancestor)
+                .with_context(|| format!("creando el directorio {}", ancestor.display()))?;
+        }
+        create_private_dir(dir)?;
+        let ignore = dir.join(".gitignore");
+        if !ignore.exists() {
+            std::fs::write(&ignore, DATA_DIR_GITIGNORE)
+                .with_context(|| format!("escribiendo {}", ignore.display()))?;
+        }
+    }
+    if let Some(dir) = paths
+        .hub_db
+        .parent()
+        .filter(|d| !d.as_os_str().is_empty() && Some(*d) != data_dir)
+    {
+        std::fs::create_dir_all(dir)
+            .with_context(|| format!("creando el directorio {}", dir.display()))?;
+    }
+    for db in [&paths.brain_db, &paths.hub_db] {
+        create_private_file(db)?;
+    }
+    Ok(())
+}
+
+#[cfg(unix)]
+fn create_private_dir(dir: &std::path::Path) -> Result<()> {
+    use std::os::unix::fs::{DirBuilderExt, PermissionsExt};
+    if dir.is_dir() {
+        std::fs::set_permissions(dir, std::fs::Permissions::from_mode(0o700))
+            .with_context(|| format!("restringiendo permisos de {}", dir.display()))?;
+    } else {
+        std::fs::DirBuilder::new()
+            .mode(0o700)
+            .create(dir)
+            .with_context(|| format!("creando el directorio {}", dir.display()))?;
+    }
+    Ok(())
+}
+
+#[cfg(not(unix))]
+fn create_private_dir(dir: &std::path::Path) -> Result<()> {
+    std::fs::create_dir_all(dir).with_context(|| format!("creando el directorio {}", dir.display()))
+}
+
+/// Crea el archivo con 0600 si no existe; si existe, lo restringe a 0600. SQLite copia los
+/// permisos de la base principal a sus archivos `-wal` y `-shm`.
+#[cfg(unix)]
+fn create_private_file(path: &std::path::Path) -> Result<()> {
+    use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
+    std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .mode(0o600)
+        .open(path)
+        .with_context(|| format!("creando {}", path.display()))?;
+    std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600))
+        .with_context(|| format!("restringiendo permisos de {}", path.display()))
+}
+
+#[cfg(not(unix))]
+fn create_private_file(_path: &std::path::Path) -> Result<()> {
+    Ok(())
 }
 
 /// Parte un identificador en palabras en minúsculas: separa por caracteres no
@@ -939,5 +1016,53 @@ mod tests {
             .query_row("SELECT trusted FROM skills", [], |r| r.get(0))
             .unwrap();
         assert_eq!(t, 0);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn open_creates_private_layout_and_gitignore() {
+        use std::os::unix::fs::PermissionsExt;
+        let (dir, _) = temp_paths("perms");
+        let paths = StorePaths {
+            brain_db: dir.join("proj/.cerebro/brain.db"),
+            hub_db: dir.join("proj/.cerebro/hub.db"),
+        };
+        // el padre del directorio de datos ya existe con permisos propios: no se toca
+        std::fs::create_dir_all(dir.join("proj")).unwrap();
+        std::fs::set_permissions(dir.join("proj"), std::fs::Permissions::from_mode(0o755)).unwrap();
+        let s = Store::open(&paths).unwrap();
+        s.replace_server_tools(&server("a"), &[tool("a", "x", "x", "d")])
+            .unwrap();
+        let mode = |p: &std::path::Path| std::fs::metadata(p).unwrap().permissions().mode() & 0o777;
+        let data = dir.join("proj/.cerebro");
+        assert_eq!(mode(&data), 0o700);
+        assert_eq!(mode(&paths.brain_db), 0o600);
+        assert_eq!(mode(&paths.hub_db), 0o600);
+        assert_eq!(mode(&dir.join("proj")), 0o755, "no se tocan ancestros");
+        for ext in ["brain.db-wal", "hub.db-wal"] {
+            let wal = data.join(ext);
+            if wal.exists() {
+                assert_eq!(mode(&wal), 0o600, "{ext}");
+            }
+        }
+        let ignore = std::fs::read_to_string(data.join(".gitignore")).unwrap();
+        for pat in ["*.db", "*.db-wal", "*.db-shm", "cache/", "workspace/"] {
+            assert!(ignore.lines().any(|l| l == pat), "falta {pat}");
+        }
+        assert!(
+            !ignore.lines().any(|l| l.starts_with("brain")),
+            "brain/ debe ser versionable"
+        );
+        drop(s);
+        // reabrir: endurece un directorio y un .gitignore preexistentes sin pisar este último
+        std::fs::set_permissions(&data, std::fs::Permissions::from_mode(0o755)).unwrap();
+        std::fs::write(data.join(".gitignore"), "custom\n").unwrap();
+        Store::open(&paths).unwrap();
+        assert_eq!(mode(&data), 0o700);
+        assert_eq!(
+            std::fs::read_to_string(data.join(".gitignore")).unwrap(),
+            "custom\n"
+        );
+        std::fs::remove_dir_all(dir).ok();
     }
 }

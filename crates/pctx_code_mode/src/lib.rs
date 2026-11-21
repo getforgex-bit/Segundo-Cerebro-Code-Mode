@@ -185,7 +185,7 @@ pub mod descriptions;
 pub mod model;
 
 // Core execution API
-pub use code_mode::CodeMode;
+pub use code_mode::{CodeMode, ExecuteTypescriptOptions}; // CEREBRO-PATCH: ExecuteTypescriptOptions
 
 // Re-export config, codegen, registry, crates
 pub use pctx_codegen as codegen;
