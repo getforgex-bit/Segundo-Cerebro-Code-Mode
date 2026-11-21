@@ -81,7 +81,7 @@ async fn call_echo_is_ok_and_audited_with_redaction() {
 }
 
 #[tokio::test]
-async fn destructive_needs_approval_then_token_is_single_use() {
+async fn out_of_band_token_needs_human_approve_and_is_single_use() {
     let e = two();
     e.hub.sync_catalog().await.unwrap();
     let args = json!({"id": "1"});
@@ -96,13 +96,33 @@ async fn destructive_needs_approval_then_token_is_single_use() {
         .await
         .unwrap_err();
     assert_eq!(err.code, ErrorCode::NeedsApproval);
-    let token = err.approval_token.expect("token");
+    let token = err.approval_token.clone().expect("token");
+    assert_eq!(
+        err.message,
+        format!(
+            "Approval required: ask the user to run `cerebro approve {token}` in an interactive terminal, then retry with approvals: [\"{token}\"]"
+        )
+    );
     assert_eq!(
         e.audit.calls.lock().unwrap().last().unwrap().decision,
         CallDecision::NeedsApproval
     );
 
-    // Con el token, ok.
+    // Reenviar el token SIN approve: sigue pendiente (y no se quema).
+    let err_again = e
+        .hub
+        .call(
+            "destructive",
+            "delete_item",
+            Some(args.clone()),
+            &ctx("x", &[&token]),
+        )
+        .await
+        .unwrap_err();
+    assert_eq!(err_again.code, ErrorCode::NeedsApproval);
+
+    // Tras la aprobación humana, vale.
+    assert!(e.approvals.approve(&token).unwrap());
     let ok = e
         .hub
         .call(
@@ -122,7 +142,7 @@ async fn destructive_needs_approval_then_token_is_single_use() {
         CallDecision::Confirmed
     );
 
-    // El mismo token otra vez: ya gastado → NEEDS_APPROVAL con token nuevo.
+    // Repetir: gastado → NEEDS_APPROVAL con token nuevo.
     let err2 = e
         .hub
         .call(
@@ -136,18 +156,63 @@ async fn destructive_needs_approval_then_token_is_single_use() {
     assert_eq!(err2.code, ErrorCode::NeedsApproval);
     assert_ne!(err2.approval_token.as_deref(), Some(token.as_str()));
 
-    // Un token para otros argumentos no sirve.
+    // Un token aprobado para otros argumentos no sirve.
+    let t2 = err2.approval_token.unwrap();
+    e.approvals.approve(&t2).unwrap();
     let err3 = e
         .hub
         .call(
             "destructive",
             "delete_item",
             Some(json!({"id": "2"})),
-            &ctx("x", &[err2.approval_token.as_deref().unwrap()]),
+            &ctx("x", &[&t2]),
         )
         .await
         .unwrap_err();
     assert_eq!(err3.code, ErrorCode::NeedsApproval);
+    e.hub.shutdown().await;
+}
+
+#[tokio::test]
+async fn client_confirm_mode_accepts_pending_token() {
+    let e = env_with(vec![fixture("destructive")], json!({}), |c| {
+        c.approval_mode = cerebro_types::ApprovalMode::ClientConfirm
+    });
+    e.hub.sync_catalog().await.unwrap();
+    let args = json!({"id": "3"});
+    let err = e
+        .hub
+        .call(
+            "destructive",
+            "delete_item",
+            Some(args.clone()),
+            &ctx("x", &[]),
+        )
+        .await
+        .unwrap_err();
+    let token = err.approval_token.unwrap();
+    assert!(
+        e.hub
+            .call(
+                "destructive",
+                "delete_item",
+                Some(args.clone()),
+                &ctx("x", &[&token])
+            )
+            .await
+            .is_ok()
+    );
+    let again = e
+        .hub
+        .call(
+            "destructive",
+            "delete_item",
+            Some(args),
+            &ctx("x", &[&token]),
+        )
+        .await
+        .unwrap_err();
+    assert_eq!(again.code, ErrorCode::NeedsApproval);
     e.hub.shutdown().await;
 }
 

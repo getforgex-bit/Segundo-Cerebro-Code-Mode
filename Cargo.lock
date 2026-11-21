@@ -1037,6 +1037,7 @@ dependencies = [
  "anyhow",
  "blake3",
  "cerebro_policy",
+ "cerebro_store",
  "cerebro_types",
  "pctx_code_mode",
  "rmcp 3.11.0",

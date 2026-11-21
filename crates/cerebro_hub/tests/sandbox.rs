@@ -85,6 +85,7 @@ async fn ts_destructive_call_surfaces_needs_approval_then_succeeds_with_token() 
     assert_eq!(payload.code, ErrorCode::NeedsApproval);
     let token = payload.approval_token.unwrap();
 
+    e.approvals.approve(&token).unwrap();
     let (registry, _) = e.hub.build_registry("e2", vec![token]).unwrap();
     let out = run_ts(&cm, code, registry).await;
     assert!(out.success, "stderr: {}", out.stderr);

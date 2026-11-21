@@ -23,4 +23,5 @@ tokio = { workspace = true, features = ["sync", "time", "process", "rt", "macros
 tracing = { workspace = true }
 
 [dev-dependencies]
+cerebro_store = { path = "../cerebro_store" }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }

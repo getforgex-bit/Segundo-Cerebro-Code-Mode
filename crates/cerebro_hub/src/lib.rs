@@ -31,9 +31,9 @@ use std::time::{Duration, Instant};
 use anyhow::{Context, Result};
 use cerebro_policy::Policy;
 use cerebro_types::{
-    ApprovalRequest, ApprovalStore, AuditLog, CallCtx, CallDecision, CallStatus, CallSummary,
-    Catalog, CerebroErrorPayload, Decision, ErrorCode, ServerRecord, ServerStatus, ToolCallRecord,
-    ToolRecord,
+    ApprovalMode, ApprovalRequest, ApprovalStore, AuditLog, CallCtx, CallDecision, CallStatus,
+    CallSummary, Catalog, CerebroErrorPayload, Decision, ErrorCode, ServerRecord, ServerStatus,
+    ToolCallRecord, ToolRecord,
 };
 use pctx_code_mode::codegen::case::Case;
 use pctx_code_mode::model::CallbackConfig;
@@ -73,6 +73,9 @@ pub struct HubConfig {
     /// Un servidor sin uso durante este tiempo se apaga (se relanza al siguiente uso).
     /// `Duration::ZERO` desactiva el apagado por inactividad.
     pub idle_shutdown: Duration,
+    /// `OutOfBand` (por defecto): solo valen tokens aprobados por un humano fuera de banda.
+    /// `ClientConfirm`: también tokens pendientes (más débil; opt-in).
+    pub approval_mode: ApprovalMode,
 }
 
 impl Default for HubConfig {
@@ -81,6 +84,7 @@ impl Default for HubConfig {
             servers: vec![],
             call_timeout: Duration::from_secs(30),
             idle_shutdown: Duration::from_secs(300),
+            approval_mode: ApprovalMode::OutOfBand,
         }
     }
 }
@@ -568,7 +572,12 @@ impl Hub {
             Decision::Confirm { reason } => {
                 let mut approved = false;
                 for token in &ctx.approvals {
-                    match self.approvals.consume(token, &qualified, &args_hash) {
+                    match self.approvals.consume(
+                        token,
+                        &qualified,
+                        &args_hash,
+                        self.cfg.approval_mode,
+                    ) {
                         Ok(true) => {
                             approved = true;
                             break;
@@ -590,7 +599,10 @@ impl Hub {
                     let err = match self.approvals.create(&req) {
                         Ok(token) => CerebroErrorPayload {
                             code: ErrorCode::NeedsApproval,
-                            message: format!("{qualified} requires approval: {reason}"),
+                            message: format!(
+                                "Approval required: ask the user to run `cerebro approve {token}` \
+                                 in an interactive terminal, then retry with approvals: [\"{token}\"]"
+                            ),
                             approval_token: Some(token),
                             suggestions: vec![],
                         },
