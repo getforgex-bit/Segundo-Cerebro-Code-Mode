@@ -12,8 +12,8 @@ use std::sync::{Arc, Mutex, MutexGuard};
 
 use anyhow::{Context, anyhow, bail};
 use cerebro_types::{
-    ApprovalRequest, ApprovalStore, AuditLog, Catalog, ExecutionRecord, Result, ServerRecord,
-    ServerStatus, ToolCallRecord, ToolRecord,
+    ApprovalInfo, ApprovalMode, ApprovalRequest, ApprovalStore, AuditLog, Catalog, ExecutionRecord,
+    Result, ServerRecord, ServerStatus, ToolCallRecord, ToolRecord,
 };
 use rusqlite::{Connection, OptionalExtension, Row, params};
 use rusqlite_migration::{M, Migrations};
@@ -465,16 +465,45 @@ impl ApprovalStore for Store {
         Ok(n == 1)
     }
 
-    fn consume(&self, token: &str, tool: &str, args_hash: &str) -> Result<bool> {
+    fn consume(
+        &self,
+        token: &str,
+        tool: &str,
+        args_hash: &str,
+        mode: ApprovalMode,
+    ) -> Result<bool> {
+        let allowed = match mode {
+            ApprovalMode::OutOfBand => "('approved')",
+            ApprovalMode::ClientConfirm => "('pending', 'approved')",
+        };
         let n = self.conn().execute(
             &format!(
                 "UPDATE approvals SET status = 'consumed', consumed_at = {NOW} \
                  WHERE token = ?1 AND tool = ?2 AND args_hash = ?3 \
-                 AND status IN ('pending', 'approved') AND expires_at > {NOW}"
+                 AND status IN {allowed} AND expires_at > {NOW}"
             ),
             params![token, tool, args_hash],
         )?;
         Ok(n == 1)
+    }
+
+    fn list_pending(&self) -> Result<Vec<ApprovalInfo>> {
+        let conn = self.conn();
+        let mut stmt = conn.prepare(&format!(
+            "SELECT token, execution_id, tool, reason, created_at, expires_at FROM approvals \
+             WHERE status = 'pending' AND expires_at > {NOW} ORDER BY created_at DESC"
+        ))?;
+        let rows = stmt.query_map([], |r| {
+            Ok(ApprovalInfo {
+                token: r.get(0)?,
+                execution_id: r.get(1)?,
+                tool: r.get(2)?,
+                reason: r.get(3)?,
+                created_at: r.get(4)?,
+                expires_at: r.get(5)?,
+            })
+        })?;
+        Ok(rows.collect::<std::result::Result<Vec<_>, _>>()?)
     }
 }
 
@@ -767,6 +796,9 @@ mod tests {
         }
     }
 
+    const OOB: ApprovalMode = ApprovalMode::OutOfBand;
+    const CC: ApprovalMode = ApprovalMode::ClientConfirm;
+
     #[test]
     fn approval_valid_is_single_use() {
         let s = Store::open_in_memory().unwrap();
@@ -775,19 +807,36 @@ mod tests {
         assert!(tok.chars().all(|c| c.is_ascii_hexdigit()));
         assert_ne!(tok, s.create(&req(600)).unwrap());
         assert!(s.approve(&tok).unwrap());
-        assert!(s.consume(&tok, "gh.delete_repo", "abc").unwrap());
+        assert!(s.consume(&tok, "gh.delete_repo", "abc", OOB).unwrap());
         assert!(
-            !s.consume(&tok, "gh.delete_repo", "abc").unwrap(),
+            !s.consume(&tok, "gh.delete_repo", "abc", OOB).unwrap(),
             "reutilizado"
         );
         assert!(!s.approve(&tok).unwrap());
     }
 
     #[test]
-    fn approval_consumable_from_pending() {
+    fn approval_pending_requires_human_in_out_of_band_mode() {
+        // Seguridad: la IA ve el token en NEEDS_APPROVAL; reenviarlo sin aprobación humana
+        // no debe bastar en el modo por defecto.
         let s = Store::open_in_memory().unwrap();
         let tok = s.create(&req(600)).unwrap();
-        assert!(s.consume(&tok, "gh.delete_repo", "abc").unwrap());
+        assert!(!s.consume(&tok, "gh.delete_repo", "abc", OOB).unwrap());
+        assert_eq!(
+            s.list_pending().unwrap().len(),
+            1,
+            "sigue pendiente, no se quemó"
+        );
+        assert!(s.approve(&tok).unwrap());
+        assert!(s.consume(&tok, "gh.delete_repo", "abc", OOB).unwrap());
+        assert!(s.list_pending().unwrap().is_empty());
+    }
+
+    #[test]
+    fn approval_consumable_from_pending_only_in_client_confirm_mode() {
+        let s = Store::open_in_memory().unwrap();
+        let tok = s.create(&req(600)).unwrap();
+        assert!(s.consume(&tok, "gh.delete_repo", "abc", CC).unwrap());
     }
 
     #[test]
@@ -795,18 +844,33 @@ mod tests {
         let s = Store::open_in_memory().unwrap();
         let tok = s.create(&req(0)).unwrap();
         std::thread::sleep(std::time::Duration::from_millis(5));
-        assert!(!s.consume(&tok, "gh.delete_repo", "abc").unwrap());
+        assert!(!s.consume(&tok, "gh.delete_repo", "abc", CC).unwrap());
         assert!(!s.approve(&tok).unwrap());
+        assert!(s.list_pending().unwrap().is_empty(), "expirada no se lista");
     }
 
     #[test]
     fn approval_wrong_tool_or_hash_does_not_burn_token() {
         let s = Store::open_in_memory().unwrap();
         let tok = s.create(&req(600)).unwrap();
-        assert!(!s.consume(&tok, "gh.other", "abc").unwrap());
-        assert!(!s.consume(&tok, "gh.delete_repo", "zzz").unwrap());
-        assert!(!s.consume("no-existe", "gh.delete_repo", "abc").unwrap());
-        assert!(s.consume(&tok, "gh.delete_repo", "abc").unwrap());
+        assert!(s.approve(&tok).unwrap());
+        assert!(!s.consume(&tok, "gh.other", "abc", OOB).unwrap());
+        assert!(!s.consume(&tok, "gh.delete_repo", "zzz", OOB).unwrap());
+        assert!(
+            !s.consume("no-existe", "gh.delete_repo", "abc", OOB)
+                .unwrap()
+        );
+        assert!(s.consume(&tok, "gh.delete_repo", "abc", OOB).unwrap());
+    }
+
+    #[test]
+    fn list_pending_shows_tool_and_reason() {
+        let s = Store::open_in_memory().unwrap();
+        let tok = s.create(&req(600)).unwrap();
+        let p = s.list_pending().unwrap();
+        assert_eq!(p.len(), 1);
+        assert_eq!(p[0].token, tok);
+        assert_eq!(p[0].tool, "gh.delete_repo");
     }
 
     #[test]
