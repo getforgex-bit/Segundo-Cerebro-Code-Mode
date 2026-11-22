@@ -1,0 +1,8 @@
+{
+  "name": "forgex-stack-verify",
+  "private": true,
+  "type": "module",
+  "description": "Smoke test de FORGEX Stack (pctx + memoria + GitNexus)",
+  "scripts": { "verify": "node verify.mjs" },
+  "dependencies": { "@modelcontextprotocol/sdk": "1.32.2" }
+}

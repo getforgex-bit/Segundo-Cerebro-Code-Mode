@@ -1,5 +1,7 @@
 # Coordinación multiagente
 
+> **⏸ Congelado desde el 2026-11-22.** El proyecto se sustituye por [`../stack/`](../stack/README.md) (FORGEX Stack). Punto de congelación: commit `b122858` de `develop`. Equipos, Issues #2–#11 y sesiones en pausa o cerrados.
+
 > Coordinación permanente de los equipos de FORGEX Brain. Empezó como el espacio temporal de la Fase 0 (sesiones WS1–WS4) y ahora coordina a **dos equipos**: A en Claude Code y B en Antigravity.
 > Punto de entrada general: [`../AGENTS.md`](../AGENTS.md).
 

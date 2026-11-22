@@ -1,5 +1,7 @@
 # Estado del proyecto (lo mantiene el coordinador del Equipo A)
 
+> **⏸ Congelado desde el 2026-11-22.** Ver [`../stack/README.md`](../stack/README.md). Punto de congelación: `b122858`. El Equipo B (Neon) recibió la orden de pausa en el Issue #1, y los Issues #2–#11 están cerrados como *not planned*.
+
 _Última actualización: 2026-11-21 ~23:00 UTC: cierre de la Fase 0 en curso y organización de dos equipos preparada (ADR 0007)._
 
 ## Equipos (detalle en `TEAMS.md`)
