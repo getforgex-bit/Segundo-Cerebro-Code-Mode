@@ -1,0 +1,21 @@
+{
+  "name": "forgex-stack",
+  "version": "1.0.0",
+  "description": "FORGEX Stack: Code Mode (pctx) sobre la memoria del proyecto y los MCP que añadas",
+  "servers": [
+    {
+      "name": "memory",
+      "command": "mcp-server-memory",
+      "env": {
+        "MEMORY_FILE_PATH": "__PROJECT__/.forgex/memory.jsonl"
+      }
+    },
+    {
+      "name": "gitnexus",
+      "command": "gitnexus",
+      "args": [
+        "mcp"
+      ]
+    }
+  ]
+}
