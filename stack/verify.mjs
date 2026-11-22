@@ -43,13 +43,14 @@ else {
   await ${ns}.createEntities({ entities: [{ name: "forgex-verify", entityType: "test", observations: ["verificado ${new Date().toISOString()}"] }] });
   const found = await ${ns}.searchNodes({ query: "forgex-verify" });
   ${withGn ? 'const flows = await Gitnexus.query({ search_query: "delete item", limit: 3 });' : "const flows = null;"}
+  await ${ns}.deleteEntities({ entityNames: ["forgex-verify"] }); // no dejar la prueba en tu memoria
   return { memoria: JSON.stringify(found).includes("forgex-verify"), gitnexus: flows === null ? "no configurado" : JSON.stringify(flows).length > 2 };
 }`;
     const res = await pctx.callTool({ name: execTool, arguments: { code } });
     const out = text(res);
     if (res.isError || !/"memoria":\s*true/.test(out)) bad(`execute_typescript falló:\n${out.slice(0, 800)}`);
     else {
-      ok(`execute_typescript → memoria creada y leída (namespace ${ns})`);
+      ok(`execute_typescript → memoria creada, leída y borrada (namespace ${ns})`);
       if (withGn) /"gitnexus":\s*true/.test(out) ? ok("execute_typescript → Gitnexus.query respondió a través de pctx") : bad(`Gitnexus.query sin resultado:\n${out.slice(0, 600)}`);
     }
   }

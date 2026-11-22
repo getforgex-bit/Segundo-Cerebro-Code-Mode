@@ -7,10 +7,10 @@ STACK_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT="${1:-$PWD}"
 shift || true
 
-# 1. Node ≥ 22.18 (lo exige GitNexus)
-if ! command -v node >/dev/null 2>&1; then echo "✘ Falta Node.js ≥ 22.18 (https://nodejs.org)"; exit 1; fi
-NODE_OK=$(node -e 'const [a,b]=process.versions.node.split(".").map(Number); console.log((a===22&&b>=18)||a>=24?"1":"0")')
-if [ "$NODE_OK" != "1" ]; then echo "✘ Node $(node -v) es demasiado antiguo: GitNexus exige 22.18+ (rama 22) o 24.11+"; exit 1; fi
+# 1. Node ^22.18 o >=24.11 (lo exige GitNexus)
+if ! command -v node >/dev/null 2>&1; then echo "✘ Falta Node.js (^22.18 o >=24.11): instala la LTS de https://nodejs.org"; exit 1; fi
+NODE_OK=$(node -p 'const [a,b]=process.versions.node.split(".").map(Number); (a===22&&b>=18)||(a===24&&b>=11)||a>=25 ? 1 : 0')
+if [ "$NODE_OK" != "1" ]; then echo "✘ Node $(node -v) no vale: GitNexus exige ^22.18 o >=24.11 (instala la LTS de https://nodejs.org)"; exit 1; fi
 
 # 2. Herramientas globales (solo si faltan)
 for pkg in "pctx:@portofcontext/pctx" "gitnexus:gitnexus" "mcp-server-memory:@modelcontextprotocol/server-memory"; do
@@ -26,6 +26,7 @@ if [ ! -d "$PROJECT/.git" ]; then echo "⚠ $PROJECT no es un repo git; GitNexus
 # 4. Configuración del proyecto y de los clientes (idempotente, con backups)
 node "$STACK_DIR/configure.mjs" "$PROJECT" "$@"
 
-# 5. Dependencias del smoke test
+# 5. Smoke test: arranca pctx, usa la memoria y GitNexus a través de Code Mode y mide tokens
 (cd "$STACK_DIR" && npm i --no-audit --no-fund --silent)
-echo "→ Verifica con: node \"$STACK_DIR/verify.mjs\" \"$PROJECT\""
+echo
+node "$STACK_DIR/verify.mjs" "$PROJECT"
